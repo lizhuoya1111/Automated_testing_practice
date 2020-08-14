@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <style>body {
+	font-family: Helvetica, Arial, sans-serif;
+	font-size: 12px;
+	min-width: 1200px;
+	color: #999;
+}
+
+h1 {
+	font-size: 24px;
+	color: black;
+}
+
+h2 {
+	font-size: 16px;
+	color: black;
+}
+
+p {
+    color: black;
+}
+
+a {
+	color: #999;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+
+#environment td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+}
+
+#environment tr:nth-child(odd) {
+	background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed, .passed .col-result {
+	color: green;
+}
+span.skipped, span.xfailed, span.rerun, .skipped .col-result, .xfailed .col-result, .rerun .col-result {
+	color: orange;
+}
+span.error, span.failed, span.xpassed, .error .col-result, .failed .col-result, .xpassed .col-result  {
+	color: red;
+}
+
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+
+#results-table {
+	border: 1px solid #e6e6e6;
+	color: #999;
+	font-size: 12px;
+	width: 100%
+}
+
+#results-table th, #results-table td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+	text-align: left
+}
+#results-table th {
+	font-weight: bold
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+
+.log:only-child {
+	height: inherit
+}
+.log {
+	background-color: #e6e6e6;
+	border: 1px solid #e6e6e6;
+	color: black;
+	display: block;
+	font-family: "Courier New", Courier, monospace;
+	height: 230px;
+	overflow-y: scroll;
+	padding: 5px;
+	white-space: pre-wrap
+}
+div.image {
+	border: 1px solid #e6e6e6;
+	float: right;
+	height: 240px;
+	margin-left: 5px;
+	overflow: hidden;
+	width: 320px
+}
+div.image img {
+	width: 320px
+}
+.collapsed {
+	display: none;
+}
+.expander::after {
+	content: " (show details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+.collapser::after {
+	content: " (hide details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+	cursor: pointer;
+}
+
+.sort-icon {
+	font-size: 0px;
+	float: left;
+	margin-right: 5px;
+	margin-top: 5px;
+	/*triangle*/
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+}
+
+.inactive .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #E6E6E6;
+}
+
+.asc.active .sort-icon {
+	/*finish triangle*/
+	border-bottom: 8px solid #999;
+}
+
+.desc.active .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>2020-03-05_22_32_49DHCP_Client_report.html</h1>
+    <p>Report generated on 06-Mar-2020 at 00:22:51 by<a href="https://pypi.python.org/pypi/pytest-html"> pytest-html</a> v1.19.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;3.6.3&apos;, &apos;py&apos;: &apos;1.8.0&apos;, &apos;pluggy&apos;: &apos;0.6.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-7-6.1.7601-SP1</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;rerunfailures&apos;: &apos;4.1&apos;, &apos;metadata&apos;: &apos;1.8.0&apos;, &apos;html&apos;: &apos;1.19.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.0</td></tr></table>
+    <h2>Summary</h2>
+    <p>32 tests ran in 6601.55 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">31 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">1 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">1 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable time" col="time">Time</th>
+          <th class="sortable" col="name">Test</th>
+          <th>Description</th>
+          <th class="sortable numeric" col="duration">Duration</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="5">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-time">2020-03-05 15:36:31.201268</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139108.py::test_c139108</td>
+          <td>None</td>
+          <td class="col-duration">356.06</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;01bcf8f8547b34d0c7e7a3ae71cb723b&quot;)&gt;<br/><br/>    def test_c139108(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_3, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;13.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;114.114.114.114&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;13.1.1.2&quot;, ip_range1_2=&quot;13.1.1.20&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		login_web(browser, url=dev3)<br/>    		time.sleep(2)<br/>    		physics_interface_from_dhcp_obtain_ip_jyl(browser, physical_interface=interface_name_2, work_mode=&quot;dhcp&quot;,<br/>    		                                          dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(5)<br/>    		result1 = a.output()<br/>    		# print(result1)<br/>    		# 点击停止<br/>    		a.close()<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;dhcpclient_button_div&quot;]/a[1]&#x27;).click()<br/>    <br/>    		vlan_add_jyl(browser, physicl_interface=interface_name_2, vlan_id=&quot;22&quot;, work_mode=&quot;route&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;switchmode access&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		time.sleep(2)<br/>    		a.close()<br/>    		vlan_interface_from_dhcp_obtain_ip_jyl(browser, vlan_interface=interface_name_2+&quot;.22&quot;, work_mode=&quot;dhcp&quot;,<br/>    		                                       dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(2)<br/>    		result2 = a.output()<br/>    		# print(result2)<br/>    		a.close()<br/>    		time.sleep(1)<br/>    		vlan_delete_jyl(browser)<br/>    		time.sleep(1)<br/>    		physics_interface_change_transparent_interface(browser,  interface2=interface_name_2,)<br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;, allow_ping=&quot;yes&quot;)<br/>    		bridge_edit_interface_jyl(browser, interface=interface_name_2, bridge_interface=&quot;br_1&quot;)<br/>    		time.sleep(1)<br/>    		bridge_interface_from_dhcp_obtain_ip_jyl(browser, bridge=&quot;br_1&quot;, work_mode=&quot;dhcp&quot;,<br/>    		                                         dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    		time.sleep(1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(2)<br/>    		result3 = a.output()<br/>    		# print(result3)<br/>    		a.close()<br/>    <br/>    		time.sleep(1)<br/>    		delete_bridge_jyl(browser)<br/>    		time.sleep(1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;work-mode route&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 255.255.255.0&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		login_web(browser, url=dev1)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;ms&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;en\r\nping 13.1.1.1\r\nBSAFE&gt;en\r\nBSAFE#ping 13.1.1.1\r\npval.type_str ping\r\nPING 13.1.1.1 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 13.1.1.1 icmp_seq=1  Destination Host Unreachable\r\n&#x27;</span><br/><br/>test_case\scg\scg_DHCP_Client\test_c139108.py:103: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;01bcf8f8547b34d0c7e7a3ae71cb723b&quot;)&gt;<br/><br/>    def test_c139108(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_3, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;13.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;114.114.114.114&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;13.1.1.2&quot;, ip_range1_2=&quot;13.1.1.20&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		login_web(browser, url=dev3)<br/>    		time.sleep(2)<br/>    		physics_interface_from_dhcp_obtain_ip_jyl(browser, physical_interface=interface_name_2, work_mode=&quot;dhcp&quot;,<br/>    		                                          dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(5)<br/>    		result1 = a.output()<br/>    		# print(result1)<br/>    		# 点击停止<br/>    		a.close()<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;dhcpclient_button_div&quot;]/a[1]&#x27;).click()<br/>    <br/>    		vlan_add_jyl(browser, physicl_interface=interface_name_2, vlan_id=&quot;22&quot;, work_mode=&quot;route&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;switchmode access&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		time.sleep(2)<br/>    		a.close()<br/>    		vlan_interface_from_dhcp_obtain_ip_jyl(browser, vlan_interface=interface_name_2+&quot;.22&quot;, work_mode=&quot;dhcp&quot;,<br/>    		                                       dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(2)<br/>    		result2 = a.output()<br/>    		# print(result2)<br/>    		a.close()<br/>    		time.sleep(1)<br/>    		vlan_delete_jyl(browser)<br/>    		time.sleep(1)<br/>    		physics_interface_change_transparent_interface(browser,  interface2=interface_name_2,)<br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;, allow_ping=&quot;yes&quot;)<br/>    		bridge_edit_interface_jyl(browser, interface=interface_name_2, bridge_interface=&quot;br_1&quot;)<br/>    		time.sleep(1)<br/>    		bridge_interface_from_dhcp_obtain_ip_jyl(browser, bridge=&quot;br_1&quot;, work_mode=&quot;dhcp&quot;,<br/>    		                                         dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    		time.sleep(1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(2)<br/>    		result3 = a.output()<br/>    		# print(result3)<br/>    		a.close()<br/>    <br/>    		time.sleep(1)<br/>    		delete_bridge_jyl(browser)<br/>    		time.sleep(1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;work-mode route&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 255.255.255.0&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		login_web(browser, url=dev1)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;ms&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;ms&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;en\r\nping 13.1.1.1\r\nBSAFE&gt;en\r\nBSAFE#ping 13.1.1.1\r\npval.type_str ping\r\nPING 13.1.1.1 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 13.1.1.1 icmp_seq=1  Destination Host Unreachable\r\n&#x27;</span><br/><br/>test_case\scg\scg_DHCP_Client\test_c139108.py:109: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;01bcf8f8547b34d0c7e7a3ae71cb723b&quot;)&gt;<br/><br/>    def test_c139108(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_3, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;13.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;114.114.114.114&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;13.1.1.2&quot;, ip_range1_2=&quot;13.1.1.20&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		login_web(browser, url=dev3)<br/>    		time.sleep(2)<br/>    		physics_interface_from_dhcp_obtain_ip_jyl(browser, physical_interface=interface_name_2, work_mode=&quot;dhcp&quot;,<br/>    		                                          dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(5)<br/>    		result1 = a.output()<br/>    		# print(result1)<br/>    		# 点击停止<br/>    		a.close()<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;dhcpclient_button_div&quot;]/a[1]&#x27;).click()<br/>    <br/>    		vlan_add_jyl(browser, physicl_interface=interface_name_2, vlan_id=&quot;22&quot;, work_mode=&quot;route&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;switchmode access&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		time.sleep(2)<br/>    		a.close()<br/>    		vlan_interface_from_dhcp_obtain_ip_jyl(browser, vlan_interface=interface_name_2+&quot;.22&quot;, work_mode=&quot;dhcp&quot;,<br/>    		                                       dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(2)<br/>    		result2 = a.output()<br/>    		# print(result2)<br/>    		a.close()<br/>    		time.sleep(1)<br/>    		vlan_delete_jyl(browser)<br/>    		time.sleep(1)<br/>    		physics_interface_change_transparent_interface(browser,  interface2=interface_name_2,)<br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;, allow_ping=&quot;yes&quot;)<br/>    		bridge_edit_interface_jyl(browser, interface=interface_name_2, bridge_interface=&quot;br_1&quot;)<br/>    		time.sleep(1)<br/>    		bridge_interface_from_dhcp_obtain_ip_jyl(browser, bridge=&quot;br_1&quot;, work_mode=&quot;dhcp&quot;,<br/>    		                                         dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    		time.sleep(1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(2)<br/>    		result3 = a.output()<br/>    		# print(result3)<br/>    		a.close()<br/>    <br/>    		time.sleep(1)<br/>    		delete_bridge_jyl(browser)<br/>    		time.sleep(1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;work-mode route&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 255.255.255.0&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		login_web(browser, url=dev1)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;ms&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;ms&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=[dev1, dev3])<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_DHCP_Client\test_c139108.py:116: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-05 15:30:35.069899</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139108.py::test_c139108</td>
+          <td>None</td>
+          <td class="col-duration">351.60</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;01bcf8f8547b34d0c7e7a3ae71cb723b&quot;)&gt;<br/><br/>    def test_c139108(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_3, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;13.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;114.114.114.114&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;13.1.1.2&quot;, ip_range1_2=&quot;13.1.1.20&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		login_web(browser, url=dev3)<br/>    		time.sleep(2)<br/>    		physics_interface_from_dhcp_obtain_ip_jyl(browser, physical_interface=interface_name_2, work_mode=&quot;dhcp&quot;,<br/>    		                                          dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(5)<br/>    		result1 = a.output()<br/>    		# print(result1)<br/>    		# 点击停止<br/>    		a.close()<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;dhcpclient_button_div&quot;]/a[1]&#x27;).click()<br/>    <br/>    		vlan_add_jyl(browser, physicl_interface=interface_name_2, vlan_id=&quot;22&quot;, work_mode=&quot;route&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;switchmode access&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		time.sleep(2)<br/>    		a.close()<br/>    		vlan_interface_from_dhcp_obtain_ip_jyl(browser, vlan_interface=interface_name_2+&quot;.22&quot;, work_mode=&quot;dhcp&quot;,<br/>    		                                       dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(2)<br/>    		result2 = a.output()<br/>    		# print(result2)<br/>    		a.close()<br/>    		time.sleep(1)<br/>    		vlan_delete_jyl(browser)<br/>    		time.sleep(1)<br/>    		physics_interface_change_transparent_interface(browser,  interface2=interface_name_2,)<br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;, allow_ping=&quot;yes&quot;)<br/>    		bridge_edit_interface_jyl(browser, interface=interface_name_2, bridge_interface=&quot;br_1&quot;)<br/>    		time.sleep(1)<br/>    		bridge_interface_from_dhcp_obtain_ip_jyl(browser, bridge=&quot;br_1&quot;, work_mode=&quot;dhcp&quot;,<br/>    		                                         dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    		time.sleep(1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(2)<br/>    		result3 = a.output()<br/>    		# print(result3)<br/>    		a.close()<br/>    <br/>    		time.sleep(1)<br/>    		delete_bridge_jyl(browser)<br/>    		time.sleep(1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;work-mode route&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 255.255.255.0&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		login_web(browser, url=dev1)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;ms&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;BSAFE&gt;en\r\nping 13.1.1.1\r\nBSAFE#ping 13.1.1.1\r\npval.type_str ping\r\nPING 13.1.1.1 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 13.1.1.1 icmp_seq=1  Destination Host Unreachable\r\n&#x27;</span><br/><br/>test_case\scg\scg_DHCP_Client\test_c139108.py:103: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;01bcf8f8547b34d0c7e7a3ae71cb723b&quot;)&gt;<br/><br/>    def test_c139108(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_3, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;13.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;114.114.114.114&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;13.1.1.2&quot;, ip_range1_2=&quot;13.1.1.20&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		login_web(browser, url=dev3)<br/>    		time.sleep(2)<br/>    		physics_interface_from_dhcp_obtain_ip_jyl(browser, physical_interface=interface_name_2, work_mode=&quot;dhcp&quot;,<br/>    		                                          dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(5)<br/>    		result1 = a.output()<br/>    		# print(result1)<br/>    		# 点击停止<br/>    		a.close()<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;dhcpclient_button_div&quot;]/a[1]&#x27;).click()<br/>    <br/>    		vlan_add_jyl(browser, physicl_interface=interface_name_2, vlan_id=&quot;22&quot;, work_mode=&quot;route&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;switchmode access&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		time.sleep(2)<br/>    		a.close()<br/>    		vlan_interface_from_dhcp_obtain_ip_jyl(browser, vlan_interface=interface_name_2+&quot;.22&quot;, work_mode=&quot;dhcp&quot;,<br/>    		                                       dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(2)<br/>    		result2 = a.output()<br/>    		# print(result2)<br/>    		a.close()<br/>    		time.sleep(1)<br/>    		vlan_delete_jyl(browser)<br/>    		time.sleep(1)<br/>    		physics_interface_change_transparent_interface(browser,  interface2=interface_name_2,)<br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;, allow_ping=&quot;yes&quot;)<br/>    		bridge_edit_interface_jyl(browser, interface=interface_name_2, bridge_interface=&quot;br_1&quot;)<br/>    		time.sleep(1)<br/>    		bridge_interface_from_dhcp_obtain_ip_jyl(browser, bridge=&quot;br_1&quot;, work_mode=&quot;dhcp&quot;,<br/>    		                                         dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    		time.sleep(1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(2)<br/>    		result3 = a.output()<br/>    		# print(result3)<br/>    		a.close()<br/>    <br/>    		time.sleep(1)<br/>    		delete_bridge_jyl(browser)<br/>    		time.sleep(1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;work-mode route&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 255.255.255.0&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		login_web(browser, url=dev1)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;ms&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;ms&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;BSAFE&gt;en\r\nping 13.1.1.1\r\nBSAFE#ping 13.1.1.1\r\npval.type_str ping\r\nPING 13.1.1.1 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 13.1.1.1 icmp_seq=1  Destination Host Unreachable\r\n&#x27;</span><br/><br/>test_case\scg\scg_DHCP_Client\test_c139108.py:109: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;01bcf8f8547b34d0c7e7a3ae71cb723b&quot;)&gt;<br/><br/>    def test_c139108(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_3, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;13.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;114.114.114.114&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;13.1.1.2&quot;, ip_range1_2=&quot;13.1.1.20&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		login_web(browser, url=dev3)<br/>    		time.sleep(2)<br/>    		physics_interface_from_dhcp_obtain_ip_jyl(browser, physical_interface=interface_name_2, work_mode=&quot;dhcp&quot;,<br/>    		                                          dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(5)<br/>    		result1 = a.output()<br/>    		# print(result1)<br/>    		# 点击停止<br/>    		a.close()<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;dhcpclient_button_div&quot;]/a[1]&#x27;).click()<br/>    <br/>    		vlan_add_jyl(browser, physicl_interface=interface_name_2, vlan_id=&quot;22&quot;, work_mode=&quot;route&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;switchmode access&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		time.sleep(2)<br/>    		a.close()<br/>    		vlan_interface_from_dhcp_obtain_ip_jyl(browser, vlan_interface=interface_name_2+&quot;.22&quot;, work_mode=&quot;dhcp&quot;,<br/>    		                                       dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(2)<br/>    		result2 = a.output()<br/>    		# print(result2)<br/>    		a.close()<br/>    		time.sleep(1)<br/>    		vlan_delete_jyl(browser)<br/>    		time.sleep(1)<br/>    		physics_interface_change_transparent_interface(browser,  interface2=interface_name_2,)<br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;, allow_ping=&quot;yes&quot;)<br/>    		bridge_edit_interface_jyl(browser, interface=interface_name_2, bridge_interface=&quot;br_1&quot;)<br/>    		time.sleep(1)<br/>    		bridge_interface_from_dhcp_obtain_ip_jyl(browser, bridge=&quot;br_1&quot;, work_mode=&quot;dhcp&quot;,<br/>    		                                         dhcp_status1=&quot;release_recapture&quot;, dhcp_status2=&quot;click&quot;)<br/>    		time.sleep(1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.1&quot;)<br/>    		time.sleep(2)<br/>    		result3 = a.output()<br/>    		# print(result3)<br/>    		a.close()<br/>    <br/>    		time.sleep(1)<br/>    		delete_bridge_jyl(browser)<br/>    		time.sleep(1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;work-mode route&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 255.255.255.0&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		login_web(browser, url=dev1)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;ms&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;ms&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=[dev1, dev3])<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_DHCP_Client\test_c139108.py:116: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 14:38:31.960267</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139082.py::test_c139082</td>
+          <td>None</td>
+          <td class="col-duration">301.91</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 14:43:17.773615</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139083.py::test_c139083</td>
+          <td>None</td>
+          <td class="col-duration">285.81</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 14:47:59.900751</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139084.py::test_139084</td>
+          <td>None</td>
+          <td class="col-duration">282.12</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 14:52:43.893995</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139085.py::test_c139085</td>
+          <td>None</td>
+          <td class="col-duration">283.99</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 14:55:14.937634</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139086.py::test_c139086</td>
+          <td>None</td>
+          <td class="col-duration">151.04</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 14:58:52.388072</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139087.py::test_c139087</td>
+          <td>None</td>
+          <td class="col-duration">217.44</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:00:39.823216</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139088.py::test_c139088</td>
+          <td>None</td>
+          <td class="col-duration">107.43</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:03:45.369829</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139089.py::test_c139089</td>
+          <td>None</td>
+          <td class="col-duration">185.54</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:05:38.241285</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139090.py::test_c139090</td>
+          <td>None</td>
+          <td class="col-duration">112.87</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:08:04.272638</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139091.py::test_c139091</td>
+          <td>None</td>
+          <td class="col-duration">146.02</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:10:14.163067</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139092.py::test_c139092</td>
+          <td>None</td>
+          <td class="col-duration">129.89</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:12:22.756422</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139095.py::test_c139095</td>
+          <td>None</td>
+          <td class="col-duration">128.59</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:14:26.011472</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139096.py::test_c139096</td>
+          <td>None</td>
+          <td class="col-duration">123.25</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:17:27.722865</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139098.py::test_c139098</td>
+          <td>None</td>
+          <td class="col-duration">181.71</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:19:22.779446</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139099.py::test_c139099</td>
+          <td>None</td>
+          <td class="col-duration">115.05</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:21:21.530238</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139100.py::test_c139100</td>
+          <td>None</td>
+          <td class="col-duration">118.75</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:23:07.996328</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139104.py::test_c139104</td>
+          <td>None</td>
+          <td class="col-duration">106.46</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:24:43.399784</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139105.py::test_c139105</td>
+          <td>None</td>
+          <td class="col-duration">95.40</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:41:43.016103</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139109.py::test_c139109</td>
+          <td>None</td>
+          <td class="col-duration">311.81</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:46:33.992746</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139110.py::test_c139110</td>
+          <td>None</td>
+          <td class="col-duration">290.97</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:51:59.305353</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139111.py::test_c139111</td>
+          <td>None</td>
+          <td class="col-duration">325.31</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 15:56:57.824427</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139112.py::test_c139112</td>
+          <td>None</td>
+          <td class="col-duration">298.52</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 16:02:21.847960</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139114.py::test_c139114</td>
+          <td>None</td>
+          <td class="col-duration">324.02</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 16:07:06.680252</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139117.py::test_c139117</td>
+          <td>None</td>
+          <td class="col-duration">284.83</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 16:10:41.055513</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139124.py::test_c139124</td>
+          <td>None</td>
+          <td class="col-duration">214.37</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 16:12:26.329535</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139136.py::test_c139136</td>
+          <td>None</td>
+          <td class="col-duration">105.27</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 16:16:25.678224</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139154.py::test_c139154</td>
+          <td>None</td>
+          <td class="col-duration">239.34</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 16:18:03.760834</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139158.py::test_c139158</td>
+          <td>None</td>
+          <td class="col-duration">98.08</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 16:20:20.733669</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139160.py::test_c139160</td>
+          <td>None</td>
+          <td class="col-duration">136.97</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 16:22:47.054038</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c139165.py::test_c139165</td>
+          <td>None</td>
+          <td class="col-duration">146.31</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 16:22:51.228277</td>
+          <td class="col-name">test_case/scg/scg_DHCP_Client/test_c155558.py::test_c155558</td>
+          <td>None</td>
+          <td class="col-duration">0.57</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>

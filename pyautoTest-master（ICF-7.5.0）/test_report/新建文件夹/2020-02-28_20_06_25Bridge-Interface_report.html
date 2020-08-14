@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <style>body {
+	font-family: Helvetica, Arial, sans-serif;
+	font-size: 12px;
+	min-width: 1200px;
+	color: #999;
+}
+
+h1 {
+	font-size: 24px;
+	color: black;
+}
+
+h2 {
+	font-size: 16px;
+	color: black;
+}
+
+p {
+    color: black;
+}
+
+a {
+	color: #999;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+
+#environment td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+}
+
+#environment tr:nth-child(odd) {
+	background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed, .passed .col-result {
+	color: green;
+}
+span.skipped, span.xfailed, span.rerun, .skipped .col-result, .xfailed .col-result, .rerun .col-result {
+	color: orange;
+}
+span.error, span.failed, span.xpassed, .error .col-result, .failed .col-result, .xpassed .col-result  {
+	color: red;
+}
+
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+
+#results-table {
+	border: 1px solid #e6e6e6;
+	color: #999;
+	font-size: 12px;
+	width: 100%
+}
+
+#results-table th, #results-table td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+	text-align: left
+}
+#results-table th {
+	font-weight: bold
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+
+.log:only-child {
+	height: inherit
+}
+.log {
+	background-color: #e6e6e6;
+	border: 1px solid #e6e6e6;
+	color: black;
+	display: block;
+	font-family: "Courier New", Courier, monospace;
+	height: 230px;
+	overflow-y: scroll;
+	padding: 5px;
+	white-space: pre-wrap
+}
+div.image {
+	border: 1px solid #e6e6e6;
+	float: right;
+	height: 240px;
+	margin-left: 5px;
+	overflow: hidden;
+	width: 320px
+}
+div.image img {
+	width: 320px
+}
+.collapsed {
+	display: none;
+}
+.expander::after {
+	content: " (show details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+.collapser::after {
+	content: " (hide details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+	cursor: pointer;
+}
+
+.sort-icon {
+	font-size: 0px;
+	float: left;
+	margin-right: 5px;
+	margin-top: 5px;
+	/*triangle*/
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+}
+
+.inactive .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #E6E6E6;
+}
+
+.asc.active .sort-icon {
+	/*finish triangle*/
+	border-bottom: 8px solid #999;
+}
+
+.desc.active .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>2020-02-28_20_06_25Bridge-Interface_report.html</h1>
+    <p>Report generated on 28-Feb-2020 at 21:00:57 by<a href="https://pypi.python.org/pypi/pytest-html"> pytest-html</a> v1.19.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;3.6.3&apos;, &apos;py&apos;: &apos;1.8.0&apos;, &apos;pluggy&apos;: &apos;0.6.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-7-6.1.7601-SP1</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;rerunfailures&apos;: &apos;4.1&apos;, &apos;metadata&apos;: &apos;1.8.0&apos;, &apos;html&apos;: &apos;1.19.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.0</td></tr></table>
+    <h2>Summary</h2>
+    <p>86 tests ran in 3271.57 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">85 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">1 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">3 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable time" col="time">Time</th>
+          <th class="sortable" col="name">Test</th>
+          <th>Description</th>
+          <th class="sortable numeric" col="duration">Duration</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="5">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-time">2020-02-28 12:19:01.798737</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140447.py::test_c140447</td>
+          <td>None</td>
+          <td class="col-duration">86.29</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/><br/>    def test_c140447(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;)<br/>    		bri_edit_jyl(browser, bridge=&quot;br_1&quot;)<br/>    		enable = browser.find_element_by_xpath(&#x27;//*[@id=&quot;snat&quot;]&#x27;).is_selected()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface bridge br_1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		print(enable)<br/>    		try:<br/>&gt;   			assert enable == False<br/><span class="error">E      AssertionError: assert True == False</span><br/><br/>test_case\scg\scg_Bridge-Interface\test_c140447.py:34: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/><br/>    def test_c140447(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;)<br/>    		bri_edit_jyl(browser, bridge=&quot;br_1&quot;)<br/>    		enable = browser.find_element_by_xpath(&#x27;//*[@id=&quot;snat&quot;]&#x27;).is_selected()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface bridge br_1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		print(enable)<br/>    		try:<br/>    			assert enable == False<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>&gt;   			assert enable == False<br/><span class="error">E      AssertionError: assert True == False</span><br/><br/>test_case\scg\scg_Bridge-Interface\test_c140447.py:38: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/><br/>    def test_c140447(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;)<br/>    		bri_edit_jyl(browser, bridge=&quot;br_1&quot;)<br/>    		enable = browser.find_element_by_xpath(&#x27;//*[@id=&quot;snat&quot;]&#x27;).is_selected()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface bridge br_1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		print(enable)<br/>    		try:<br/>    			assert enable == False<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert enable == False<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_Bridge-Interface\test_c140447.py:44: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-02-28 12:13:32.536905</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140443.py::test_c140443</td>
+          <td>None</td>
+          <td class="col-duration">153.66</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/><br/>    def test_c140443(browser):<br/>    	try:<br/>    		login_web(browser, url=dev4)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev4)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 34.1.1.4&quot;)<br/>    		a.execute(&quot;work-mode transparent&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;, snat=&quot;yes&quot;)<br/>    		login_web(browser, url=dev3)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_3, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;34.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;117.117.117.117&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;34.1.1.5&quot;, ip_range1_2=&quot;34.1.1.20&quot;)<br/>    		login_web(browser, url=dev4)<br/>    		bridge_edit_interface_jyl(browser, bridge_interface=&quot;br_1&quot;, interface=interface_name_2)<br/>&gt;   		bridge_interface_from_dhcp_obtain_ip_jyl(browser, bridge=&quot;br_1&quot;,  work_mode=&quot;dhcp&quot;)<br/><br/>test_case\scg\scg_Bridge-Interface\test_c140443.py:39: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/>bridge = &#x27;br_1&#x27;, description = &#x27;&#x27;, work_mode = &#x27;dhcp&#x27;, dhcp_status1 = &#x27;&#x27;<br/>dhcp_status2 = &#x27;&#x27;, dhcp_status3 = &#x27;&#x27;, update_default_gateway = &#x27;&#x27;<br/>update_system_dns = &#x27;&#x27;, snat = &#x27;&#x27;, allow_ping = &#x27;&#x27;<br/><br/>    def bridge_interface_from_dhcp_obtain_ip_jyl(browser, bridge=&quot;&quot;, description=&quot;&quot;, work_mode=&quot;dhcp&quot;, dhcp_status1=&quot;&quot;,<br/>                                                 dhcp_status2=&quot;&quot;, dhcp_status3=&quot;&quot;, update_default_gateway=&quot;&quot;,<br/>                                                 update_system_dns=&quot;&quot;, snat=&quot;&quot;, allow_ping=&quot;&quot;):<br/>    	# 定位到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# browser.switch_to.frame(&quot;lefttree&quot;)<br/>    	# # 点击网络<br/>    	# browser.find_element_by_xpath(网络).click()<br/>    	# if not browser.find_element_by_xpath(&#x27;//*[text()=&quot;接口设置&quot;]/../ul&#x27;).is_displayed():<br/>    	# 	# 如果不可见，点击加号，展开元素<br/>    	# 	browser.find_element_by_xpath(接口设置).click()<br/>    	# # 点击网桥<br/>    	# browser.find_element_by_xpath(网桥).click()<br/>    	# # 定位到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# # 定位到内容frame<br/>    	# browser.switch_to.frame(&quot;content&quot;)<br/>    	into_fun(browser, 网桥)<br/>    	n = 2<br/>    	# 获取接口名称<br/>    	getname = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[&#x27; + str(n) + &#x27;]/td[2]&#x27;).text.rstrip()<br/>    	# print(getname)<br/>    	while getname != bridge:<br/>    		n = n + 1<br/>    		getname = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[&#x27; + str(n) + &#x27;]/td[2]&#x27;).text.rstrip()<br/>    	# 点击编辑<br/>    	time.sleep(2)<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[&#x27; + str(n) + &#x27;]/td[7]/a[1]/img&#x27;).click()<br/>    	# 输入描述<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;desc&quot;]&#x27;).send_keys(description)<br/>    	# 点击dhcp<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;address_mode_1&quot;]&#x27;).click()<br/>    	time.sleep(2)<br/>    	if update_default_gateway == &quot;open&quot;:<br/>    		enable = browser.find_element_by_xpath(&#x27;//*[@id=&quot;gw_update&quot;]&#x27;).is_selected()<br/>    		if enable != True:<br/>    			time.sleep(1)<br/>    			# 点击更新默认网关(开启)<br/>    			browser.find_element_by_xpath(&#x27;//*[@id=&quot;gw_update&quot;]&#x27;).click()<br/>    	if update_default_gateway == &quot;close&quot;:<br/>    		enable = browser.find_element_by_xpath(&#x27;//*[@id=&quot;gw_update&quot;]&#x27;).is_selected()<br/>    		if enable == True:<br/>    			time.sleep(1)<br/>    			# 点击更新默认网关（关闭）<br/>    			browser.find_element_by_xpath(&#x27;//*[@id=&quot;gw_update&quot;]&#x27;).click()<br/>    	if update_system_dns == &quot;open&quot;:<br/>    		enable = browser.find_element_by_xpath(&#x27;//*[@id=&quot;dns_update&quot;]&#x27;).is_selected()<br/>    		if enable != True:<br/>    			time.sleep(1)<br/>    			# 点击更新默认网关(开启)<br/>    			browser.find_element_by_xpath(&#x27;//*[@id=&quot;dns_update&quot;]&#x27;).click()<br/>    	if update_system_dns == &quot;close&quot;:<br/>    		enable = browser.find_element_by_xpath(&#x27;//*[@id=&quot;dns_update&quot;]&#x27;).is_selected()<br/>    		if enable == True:<br/>    			time.sleep(1)<br/>    			# 点击更新默认网关（关闭）<br/>    			browser.find_element_by_xpath(&#x27;//*[@id=&quot;dns_update&quot;]&#x27;).click()<br/>    	if snat == &quot;open&quot;:<br/>    		enable = browser.find_element_by_xpath(&#x27;//*[@id=&quot;snat&quot;]&#x27;).is_selected()<br/>    		if enable != True:<br/>    			time.sleep(1)<br/>    			# 点击更新默认网关(开启)<br/>    			browser.find_element_by_xpath(&#x27;//*[@id=&quot;snat&quot;]&#x27;).click()<br/>    	if snat == &quot;close&quot;:<br/>    		enable = browser.find_element_by_xpath(&#x27;//*[@id=&quot;snat&quot;]&#x27;).is_selected()<br/>    		if enable == True:<br/>    			time.sleep(1)<br/>    			# 点击更新默认网关（关闭）<br/>    			browser.find_element_by_xpath(&#x27;//*[@id=&quot;snat&quot;]&#x27;).click()<br/>    	if allow_ping == &quot;open&quot;:<br/>    		enable = browser.find_element_by_xpath(&#x27;//*[@id=&quot;ping&quot;]&#x27;).is_selected()<br/>    		if enable == True:<br/>    			time.sleep(1)<br/>    		else:<br/>    			# 点击更新默认网关(开启)<br/>    			browser.find_element_by_xpath(&#x27;//*[@id=&quot;ping&quot;]&#x27;).click()<br/>    	if allow_ping == &quot;close&quot;:<br/>    		enable = browser.find_element_by_xpath(&#x27;//*[@id=&quot;ping&quot;]&#x27;).is_selected()<br/>    		if enable == True:<br/>    			time.sleep(1)<br/>    			# 点击更新默认网关（关闭）<br/>    			browser.find_element_by_xpath(&#x27;//*[@id=&quot;ping&quot;]&#x27;).click()<br/>    	# 点击保存<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;container&quot;]/div[2]/form/div[3]/div[2]/div/input[2]&#x27;).click()<br/>    	time.sleep(5)<br/>    	# 点击返回<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;link_but&quot;]&#x27;).click()<br/>    	time.sleep(5)<br/>    	# 获取接口名称<br/>    	getname1 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;dhcp_ip&quot;]&#x27;).text.rstrip()<br/>    	# print(getname1)<br/>    	loopmax = 0<br/>    	while getname1 == &quot;0.0.0.0&quot; and loopmax &lt; 5:<br/>    		# 点击刷新<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;dhcpclient_con_div&quot;]/a&#x27;).click()<br/>    		# 获取接口名称<br/>    		getname1 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;dhcp_ip&quot;]&#x27;).text.rstrip()<br/>    		print(getname1)<br/>    		loopmax += 1<br/>    		time.sleep(2)<br/>    	if dhcp_status1 == &quot;release_recapture&quot;:<br/>    		# 点击停止<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;dhcpclient_button_div&quot;]/a[1]&#x27;).click()<br/>    		time.sleep(3)<br/>    	if dhcp_status2 == &quot;stop&quot;:<br/>    		# 点击停止<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;dhcpclient_button_div&quot;]/a[1]&#x27;).click()<br/>    		time.sleep(1)<br/>    	if dhcp_status3 == &quot;refresh&quot;:<br/>    		# 点击刷新<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;dhcpclient_con_div&quot;]/a&#x27;).click()<br/>    		time.sleep(3)<br/>    	if dhcp_status2 == &quot;stop&quot;:<br/>    		# 点击取消						# //*[@id=&quot;container&quot;]/div[2]/form/div[3]/div[2]/div/input[3]<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;container&quot;]/div[2]/form/div[3]/div[2]/div/input[3]&#x27;).click()<br/>    	if dhcp_status2 != &quot;stop&quot;:<br/>    		# 点击保存<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;container&quot;]/div[2]/form/div[3]/div[2]/div/input[2]&#x27;).click()<br/>    		# 点击返回<br/>&gt;   		browser.find_element_by_xpath(&#x27;//*[@id=&quot;link_but&quot;]&#x27;).click()<br/><br/>page_obj\scg\scg_def_bridge.py:400: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/>xpath = &#x27;//*[@id=&quot;link_but&quot;]&#x27;<br/><br/>    def find_element_by_xpath(self, xpath):<br/>        &quot;&quot;&quot;<br/>            Finds an element by xpath.<br/>    <br/>            :Args:<br/>             - xpath - The xpath locator of the element to find.<br/>    <br/>            :Returns:<br/>             - WebElement - the element if it was found<br/>    <br/>            :Raises:<br/>             - NoSuchElementException - if the element wasn&#x27;t found<br/>    <br/>            :Usage:<br/>                element = driver.find_element_by_xpath(&#x27;//div/td[1]&#x27;)<br/>            &quot;&quot;&quot;<br/>&gt;       return self.find_element(by=By.XPATH, value=xpath)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:393: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/>by = &#x27;xpath&#x27;, value = &#x27;//*[@id=&quot;link_but&quot;]&#x27;<br/><br/>    def find_element(self, by=By.ID, value=None):<br/>        &quot;&quot;&quot;<br/>            Find an element given a By strategy and locator. Prefer the find_element_by_* methods when<br/>            possible.<br/>    <br/>            :Usage:<br/>                element = driver.find_element(By.ID, &#x27;foo&#x27;)<br/>    <br/>            :rtype: WebElement<br/>            &quot;&quot;&quot;<br/>        if self.w3c:<br/>            if by == By.ID:<br/>                by = By.CSS_SELECTOR<br/>                value = &#x27;[id=&quot;%s&quot;]&#x27; % value<br/>            elif by == By.TAG_NAME:<br/>                by = By.CSS_SELECTOR<br/>            elif by == By.CLASS_NAME:<br/>                by = By.CSS_SELECTOR<br/>                value = &quot;.%s&quot; % value<br/>            elif by == By.NAME:<br/>                by = By.CSS_SELECTOR<br/>                value = &#x27;[name=&quot;%s&quot;]&#x27; % value<br/>        return self.execute(Command.FIND_ELEMENT, {<br/>            &#x27;using&#x27;: by,<br/>&gt;           &#x27;value&#x27;: value})[&#x27;value&#x27;]<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:966: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/>driver_command = &#x27;findElement&#x27;<br/>params = {&#x27;sessionId&#x27;: &#x27;d945221518cf80991cca3d62ca5a52cf&#x27;, &#x27;using&#x27;: &#x27;xpath&#x27;, &#x27;value&#x27;: &#x27;//*[@id=&quot;link_but&quot;]&#x27;}<br/><br/>    def execute(self, driver_command, params=None):<br/>        &quot;&quot;&quot;<br/>            Sends a command to be executed by a command.CommandExecutor.<br/>    <br/>            :Args:<br/>             - driver_command: The name of the command to execute as a string.<br/>             - params: A dictionary of named parameters to send with the command.<br/>    <br/>            :Returns:<br/>              The command&#x27;s JSON response loaded into a dictionary object.<br/>            &quot;&quot;&quot;<br/>        if self.session_id is not None:<br/>            if not params:<br/>                params = {&#x27;sessionId&#x27;: self.session_id}<br/>            elif &#x27;sessionId&#x27; not in params:<br/>                params[&#x27;sessionId&#x27;] = self.session_id<br/>    <br/>        params = self._wrap_value(params)<br/>        response = self.command_executor.execute(driver_command, params)<br/>        if response:<br/>&gt;           self.error_handler.check_response(response)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:320: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x000000000B615198&gt;<br/>response = {&#x27;sessionId&#x27;: &#x27;d945221518cf80991cca3d62ca5a52cf&#x27;, &#x27;status&#x27;: 7, &#x27;value&#x27;: {&#x27;message&#x27;: &#x27;no such element: Unable to locate...r info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)&#x27;}}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>            Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>            :Args:<br/>             - response - The JSON response from the WebDriver server as a dictionary<br/>               object.<br/>    <br/>            :Raises: If the response contains an error message.<br/>            &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchElementException: Message: no such element: Unable to locate element: {&quot;method&quot;:&quot;xpath&quot;,&quot;selector&quot;:&quot;//*[@id=&quot;link_but&quot;]&quot;}</span><br/><span class="error">E         (Session info: chrome=80.0.3987.122)</span><br/><span class="error">E         (Driver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)</span><br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\errorhandler.py:242: NoSuchElementException<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/><br/>    def test_c140443(browser):<br/>    	try:<br/>    		login_web(browser, url=dev4)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev4)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 34.1.1.4&quot;)<br/>    		a.execute(&quot;work-mode transparent&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;, snat=&quot;yes&quot;)<br/>    		login_web(browser, url=dev3)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_3, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;34.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;117.117.117.117&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;34.1.1.5&quot;, ip_range1_2=&quot;34.1.1.20&quot;)<br/>    		login_web(browser, url=dev4)<br/>    		bridge_edit_interface_jyl(browser, bridge_interface=&quot;br_1&quot;, interface=interface_name_2)<br/>    		bridge_interface_from_dhcp_obtain_ip_jyl(browser, bridge=&quot;br_1&quot;,  work_mode=&quot;dhcp&quot;)<br/>    		loginfo = get_log(browser, 管理日志)<br/>    		bridge_interface_from_dhcp_obtain_ip_jyl(browser, bridge=&quot;br_1&quot;, work_mode=&quot;dhcp&quot;, dhcp_status2=&quot;stop&quot;)<br/>    		delete_bridge_byname(browser, br_name=&quot;br_1&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev4)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;work-mode route&quot;)<br/>    		a.execute(&quot;ip address 34.1.1.4 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		login_web(browser, url=dev3)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>    			assert &quot;成功&quot; in loginfo<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;成功&quot; in loginfo<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=[dev3, dev4])<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_Bridge-Interface\test_c140443.py:65: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-02-28 12:17:35.477800</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140447.py::test_c140447</td>
+          <td>None</td>
+          <td class="col-duration">81.90</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/><br/>    def test_c140447(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;)<br/>    		bri_edit_jyl(browser, bridge=&quot;br_1&quot;)<br/>    		enable = browser.find_element_by_xpath(&#x27;//*[@id=&quot;snat&quot;]&#x27;).is_selected()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface bridge br_1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		print(enable)<br/>    		try:<br/>&gt;   			assert enable == False<br/><span class="error">E      AssertionError: assert True == False</span><br/><br/>test_case\scg\scg_Bridge-Interface\test_c140447.py:34: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/><br/>    def test_c140447(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;)<br/>    		bri_edit_jyl(browser, bridge=&quot;br_1&quot;)<br/>    		enable = browser.find_element_by_xpath(&#x27;//*[@id=&quot;snat&quot;]&#x27;).is_selected()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface bridge br_1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		print(enable)<br/>    		try:<br/>    			assert enable == False<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>&gt;   			assert enable == False<br/><span class="error">E      AssertionError: assert True == False</span><br/><br/>test_case\scg\scg_Bridge-Interface\test_c140447.py:38: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/><br/>    def test_c140447(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;)<br/>    		bri_edit_jyl(browser, bridge=&quot;br_1&quot;)<br/>    		enable = browser.find_element_by_xpath(&#x27;//*[@id=&quot;snat&quot;]&#x27;).is_selected()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface bridge br_1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		print(enable)<br/>    		try:<br/>    			assert enable == False<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert enable == False<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_Bridge-Interface\test_c140447.py:44: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-02-28 12:29:42.603389</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140491.py::test_c140491</td>
+          <td>None</td>
+          <td class="col-duration">100.55</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/><br/>    def test_c140491(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 12.1.1.1&quot;)<br/>    		a.execute(&quot;work-mode transparent&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		add_vlan_inte(browser, physicl_interface=interface_name_3, vlan_id=&quot;33&quot;, work_mode=&quot;transparent&quot;)<br/>    <br/>&gt;   		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;)<br/><br/>test_case\scg\scg_Bridge-Interface\test_c140491.py:35: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/>bridge_name = &#x27;br_1&#x27;, bridge_describe = &#x27;&#x27;, snat = &#x27;no&#x27;, allow_ping = &#x27;yes&#x27;<br/>block_intra_bridge_traffic = &#x27;&#x27;, stp = &#x27;yes/no&#x27;<br/><br/>    def bridge_add_jyl(browser, bridge_name=&quot;&quot;, bridge_describe=&quot;&quot;, snat=&quot;no&quot;, allow_ping=&quot;yes&quot;, block_intra_bridge_traffic=&quot;&quot;, stp=&quot;yes/no&quot;):<br/>    <br/>    	# 定位到默认frame<br/>    	browser.refresh()<br/>    	# browser.switch_to.default_content()<br/>    	# browser.switch_to.frame(&quot;lefttree&quot;)<br/>    	# # 点击网络<br/>    	# browser.find_element_by_xpath(网络).click()<br/>    	# if not browser.find_element_by_xpath(display_接口设置).is_displayed():<br/>    	# 	# 如果不可见，点击加号，展开元素<br/>    	# 	browser.find_element_by_xpath(接口设置).click()<br/>    	# # 点击网桥<br/>    	# browser.find_element_by_xpath(网桥).click()<br/>    	# # 定位到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# # 定位到内容frame<br/>    	# browser.switch_to.frame(&quot;content&quot;)<br/>    	into_fun(browser, 网桥)<br/>    	# 点击增加<br/>&gt;   	browser.find_element_by_xpath(&#x27;//*[@id=&quot;button_area&quot;]/div/input&#x27;).click()<br/><br/>page_obj\scg\scg_def_bridge.py:53: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/>xpath = &#x27;//*[@id=&quot;button_area&quot;]/div/input&#x27;<br/><br/>    def find_element_by_xpath(self, xpath):<br/>        &quot;&quot;&quot;<br/>            Finds an element by xpath.<br/>    <br/>            :Args:<br/>             - xpath - The xpath locator of the element to find.<br/>    <br/>            :Returns:<br/>             - WebElement - the element if it was found<br/>    <br/>            :Raises:<br/>             - NoSuchElementException - if the element wasn&#x27;t found<br/>    <br/>            :Usage:<br/>                element = driver.find_element_by_xpath(&#x27;//div/td[1]&#x27;)<br/>            &quot;&quot;&quot;<br/>&gt;       return self.find_element(by=By.XPATH, value=xpath)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:393: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/>by = &#x27;xpath&#x27;, value = &#x27;//*[@id=&quot;button_area&quot;]/div/input&#x27;<br/><br/>    def find_element(self, by=By.ID, value=None):<br/>        &quot;&quot;&quot;<br/>            Find an element given a By strategy and locator. Prefer the find_element_by_* methods when<br/>            possible.<br/>    <br/>            :Usage:<br/>                element = driver.find_element(By.ID, &#x27;foo&#x27;)<br/>    <br/>            :rtype: WebElement<br/>            &quot;&quot;&quot;<br/>        if self.w3c:<br/>            if by == By.ID:<br/>                by = By.CSS_SELECTOR<br/>                value = &#x27;[id=&quot;%s&quot;]&#x27; % value<br/>            elif by == By.TAG_NAME:<br/>                by = By.CSS_SELECTOR<br/>            elif by == By.CLASS_NAME:<br/>                by = By.CSS_SELECTOR<br/>                value = &quot;.%s&quot; % value<br/>            elif by == By.NAME:<br/>                by = By.CSS_SELECTOR<br/>                value = &#x27;[name=&quot;%s&quot;]&#x27; % value<br/>        return self.execute(Command.FIND_ELEMENT, {<br/>            &#x27;using&#x27;: by,<br/>&gt;           &#x27;value&#x27;: value})[&#x27;value&#x27;]<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:966: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/>driver_command = &#x27;findElement&#x27;<br/>params = {&#x27;sessionId&#x27;: &#x27;d945221518cf80991cca3d62ca5a52cf&#x27;, &#x27;using&#x27;: &#x27;xpath&#x27;, &#x27;value&#x27;: &#x27;//*[@id=&quot;button_area&quot;]/div/input&#x27;}<br/><br/>    def execute(self, driver_command, params=None):<br/>        &quot;&quot;&quot;<br/>            Sends a command to be executed by a command.CommandExecutor.<br/>    <br/>            :Args:<br/>             - driver_command: The name of the command to execute as a string.<br/>             - params: A dictionary of named parameters to send with the command.<br/>    <br/>            :Returns:<br/>              The command&#x27;s JSON response loaded into a dictionary object.<br/>            &quot;&quot;&quot;<br/>        if self.session_id is not None:<br/>            if not params:<br/>                params = {&#x27;sessionId&#x27;: self.session_id}<br/>            elif &#x27;sessionId&#x27; not in params:<br/>                params[&#x27;sessionId&#x27;] = self.session_id<br/>    <br/>        params = self._wrap_value(params)<br/>        response = self.command_executor.execute(driver_command, params)<br/>        if response:<br/>&gt;           self.error_handler.check_response(response)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:320: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x000000000B615198&gt;<br/>response = {&#x27;sessionId&#x27;: &#x27;d945221518cf80991cca3d62ca5a52cf&#x27;, &#x27;status&#x27;: 7, &#x27;value&#x27;: {&#x27;message&#x27;: &#x27;no such element: Unable to locate...r info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)&#x27;}}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>            Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>            :Args:<br/>             - response - The JSON response from the WebDriver server as a dictionary<br/>               object.<br/>    <br/>            :Raises: If the response contains an error message.<br/>            &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchElementException: Message: no such element: Unable to locate element: {&quot;method&quot;:&quot;xpath&quot;,&quot;selector&quot;:&quot;//*[@id=&quot;button_area&quot;]/div/input&quot;}</span><br/><span class="error">E         (Session info: chrome=80.0.3987.122)</span><br/><span class="error">E         (Driver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)</span><br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\errorhandler.py:242: NoSuchElementException<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d945221518cf80991cca3d62ca5a52cf&quot;)&gt;<br/><br/>    def test_c140491(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 12.1.1.1&quot;)<br/>    		a.execute(&quot;work-mode transparent&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		add_vlan_inte(browser, physicl_interface=interface_name_3, vlan_id=&quot;33&quot;, work_mode=&quot;transparent&quot;)<br/>    <br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;)<br/>    <br/>    		bridge_edit_interface_jyl(browser, bridge_interface=&quot;br_1&quot;, interface=interface_name_2)<br/>    		bridge_edit_interface_jyl(browser, bridge_interface=&quot;br_1&quot;, interface=interface_name_3+&quot;.33&quot;)<br/>    <br/>    		loginfo1 = get_log_info(browser, 管理日志)<br/>    		print(loginfo1)<br/>    <br/>    		delete_bridge_byname(browser, br_name=&quot;br_1&quot;)<br/>    <br/>    		bridge_add_jyl(browser, bridge_name=&quot;br_1&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;work-mode route&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		add_vlan_inte(browser, physicl_interface=interface_name_2, vlan_id=&quot;22&quot;, work_mode=&quot;transparent&quot;)<br/>    <br/>    		bridge_edit_interface_jyl(browser, bridge_interface=&quot;br_1&quot;, interface=interface_name_2+&quot;.22&quot;)<br/>    		bridge_edit_interface_jyl(browser, bridge_interface=&quot;br_1&quot;, interface=interface_name_3+&quot;.33&quot;)<br/>    <br/>    		loginfo2 = get_log_info(browser, 管理日志)<br/>    		print(loginfo2)<br/>    <br/>    		delete_bridge_byname(browser, br_name=&quot;br_1&quot;)<br/>    <br/>    		del_vlan_inte_by_name(browser, interface_name=interface_name_2+&quot;.22&quot;)<br/>    		del_vlan_inte_by_name(browser, interface_name=interface_name_3+&quot;.33&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;ip address 12.1.1.1 24&quot;)<br/>    		a.close()<br/>    <br/>    		time.sleep(0.1)<br/>    		try:<br/>    			assert &quot;修改 interface失败&quot; in loginfo1<br/>    			assert &quot;修改 interface失败&quot; in loginfo2<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;修改 interface失败&quot; in loginfo1<br/>    			assert &quot;修改 interface失败&quot; in loginfo2<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_Bridge-Interface\test_c140491.py:91: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:08:09.584433</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c130459.py::test_main</td>
+          <td>None</td>
+          <td class="col-duration">96.50</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:08:16.189810</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140436.py::test_c140436</td>
+          <td>None</td>
+          <td class="col-duration">6.60</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:08:31.154666</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140437.py::test_c140437</td>
+          <td>None</td>
+          <td class="col-duration">14.96</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:09:03.679527</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140438.py::test_c140438</td>
+          <td>None</td>
+          <td class="col-duration">32.52</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:09:52.704331</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140439.py::test_c140439</td>
+          <td>None</td>
+          <td class="col-duration">49.02</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:10:21.747992</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140440.py::test_c140440</td>
+          <td>None</td>
+          <td class="col-duration">29.04</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:10:45.326341</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140441.py::test_c140441</td>
+          <td>None</td>
+          <td class="col-duration">23.58</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:10:58.667104</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140442.py::test_c140442</td>
+          <td>None</td>
+          <td class="col-duration">13.34</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:15:36.584000</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140443.py::test_c140443</td>
+          <td>None</td>
+          <td class="col-duration">124.05</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:15:53.569971</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140445.py::test_c140445</td>
+          <td>None</td>
+          <td class="col-duration">16.98</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:16:13.559114</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140446.py::test_c140446</td>
+          <td>None</td>
+          <td class="col-duration">19.99</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:19:25.684103</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140448.py::test_c140448</td>
+          <td>None</td>
+          <td class="col-duration">23.88</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:19:45.849257</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140449.py::test_c140449</td>
+          <td>None</td>
+          <td class="col-duration">20.16</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:20:02.360201</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140450.py::test_c140450</td>
+          <td>None</td>
+          <td class="col-duration">16.51</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:20:12.966808</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140453.py::test_c140453</td>
+          <td>None</td>
+          <td class="col-duration">10.60</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:20:27.448636</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140454.py::test_c140454</td>
+          <td>None</td>
+          <td class="col-duration">14.48</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:20:52.145049</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140455.py::test_c140455</td>
+          <td>None</td>
+          <td class="col-duration">24.69</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:21:06.909893</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140456.py::test_c140456</td>
+          <td>None</td>
+          <td class="col-duration">14.76</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:21:21.525729</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140463.py::test_c140463</td>
+          <td>None</td>
+          <td class="col-duration">14.61</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:21:37.214626</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140464.py::test_c140464</td>
+          <td>None</td>
+          <td class="col-duration">15.68</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:21:53.249544</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140465.py::test_c140465</td>
+          <td>None</td>
+          <td class="col-duration">16.03</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:22:12.164626</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140466.py::test_c140466</td>
+          <td>None</td>
+          <td class="col-duration">18.91</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:22:32.643797</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140467.py::test_c140467</td>
+          <td>None</td>
+          <td class="col-duration">20.47</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:22:56.626169</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140468.py::test_c140468</td>
+          <td>None</td>
+          <td class="col-duration">23.98</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:23:10.610968</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140469.py::test_c140469</td>
+          <td>None</td>
+          <td class="col-duration">13.98</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:23:32.015193</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140470.py::test_c140470</td>
+          <td>None</td>
+          <td class="col-duration">21.40</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:24:13.031539</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140471.py::test_c140471</td>
+          <td>None</td>
+          <td class="col-duration">41.01</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:24:28.490423</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140472.py::test_c140472</td>
+          <td>None</td>
+          <td class="col-duration">15.45</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:24:44.513339</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140473.py::test_c140473</td>
+          <td>None</td>
+          <td class="col-duration">16.02</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:25:20.970425</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140474.py::test_c140474</td>
+          <td>None</td>
+          <td class="col-duration">36.45</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:26:21.263873</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140475.py::test_c140475</td>
+          <td>None</td>
+          <td class="col-duration">60.29</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:26:36.601750</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140476.py::test_c140476</td>
+          <td>None</td>
+          <td class="col-duration">15.33</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:26:51.130581</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140477.py::test_c140477</td>
+          <td>None</td>
+          <td class="col-duration">14.52</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:27:20.409256</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140484.py::test_c140484</td>
+          <td>None</td>
+          <td class="col-duration">29.27</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:27:40.283393</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140485.py::test_c140485</td>
+          <td>None</td>
+          <td class="col-duration">19.87</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:27:47.657815</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140489.py::test_c140489</td>
+          <td>None</td>
+          <td class="col-duration">7.37</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:28:01.720619</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140490.py::test_c140490</td>
+          <td>None</td>
+          <td class="col-duration">14.06</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:31:07.291233</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140491.py::test_c140491</td>
+          <td>None</td>
+          <td class="col-duration">84.69</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:31:45.305407</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140492.py::test_c140492</td>
+          <td>None</td>
+          <td class="col-duration">38.01</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:32:28.199861</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140498.py::test_c140498</td>
+          <td>None</td>
+          <td class="col-duration">42.89</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:33:02.743837</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140499.py::test_c140499</td>
+          <td>None</td>
+          <td class="col-duration">34.54</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:33:25.931163</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140500.py::test_c140500</td>
+          <td>None</td>
+          <td class="col-duration">23.18</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:33:39.826958</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140501.py::test_c140501</td>
+          <td>None</td>
+          <td class="col-duration">13.89</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:38:59.232226</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140505.py::test_c140505</td>
+          <td>None</td>
+          <td class="col-duration">319.40</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:40:05.872038</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140507.py::test_c140507</td>
+          <td>None</td>
+          <td class="col-duration">66.63</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:40:59.274092</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140510.py::test_c140510</td>
+          <td>None</td>
+          <td class="col-duration">53.40</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:41:24.406530</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140511.py::test_c140511</td>
+          <td>None</td>
+          <td class="col-duration">25.13</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:42:09.686120</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140512.py::test_c140512</td>
+          <td>None</td>
+          <td class="col-duration">45.28</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:42:37.295699</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140513.py::test_c140513</td>
+          <td>None</td>
+          <td class="col-duration">27.61</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:43:40.404309</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140516.py::test_c140516</td>
+          <td>None</td>
+          <td class="col-duration">63.11</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:44:11.494087</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140517.py::test_c140517</td>
+          <td>None</td>
+          <td class="col-duration">31.09</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:45:07.530292</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140518.py::test_c140518</td>
+          <td>None</td>
+          <td class="col-duration">56.03</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:45:28.330482</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140519.py::test_c140519</td>
+          <td>None</td>
+          <td class="col-duration">20.80</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:45:50.573754</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140521.py::test_c140521</td>
+          <td>None</td>
+          <td class="col-duration">22.24</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:46:49.145104</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140522.py::test_c140522</td>
+          <td>None</td>
+          <td class="col-duration">58.57</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:47:31.984554</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140523.py::test_c140523</td>
+          <td>None</td>
+          <td class="col-duration">42.84</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:47:40.554044</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140524.py::test_c140524</td>
+          <td>None</td>
+          <td class="col-duration">8.56</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:48:33.698084</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140525.py::test_c140525</td>
+          <td>None</td>
+          <td class="col-duration">53.14</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:49:26.475103</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140526.py::test_c140526</td>
+          <td>None</td>
+          <td class="col-duration">52.77</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:50:09.641572</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140527.py::test_c140527</td>
+          <td>None</td>
+          <td class="col-duration">43.16</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:50:53.669090</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140528.py::test_c140528</td>
+          <td>None</td>
+          <td class="col-duration">44.02</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:51:32.519312</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140531.py::test_c140531</td>
+          <td>None</td>
+          <td class="col-duration">38.85</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:52:13.369649</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140532.py::test_c140532</td>
+          <td>None</td>
+          <td class="col-duration">40.85</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:52:28.897537</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140540.py::test_c140540</td>
+          <td>None</td>
+          <td class="col-duration">15.52</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:52:49.138694</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140541.py::test_c140541</td>
+          <td>None</td>
+          <td class="col-duration">20.24</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:53:10.991944</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140542.py::test_c140542</td>
+          <td>None</td>
+          <td class="col-duration">21.85</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:53:40.754647</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140543.py::test_c140543</td>
+          <td>None</td>
+          <td class="col-duration">29.76</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:54:04.331995</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140544.py::test_c140544</td>
+          <td>None</td>
+          <td class="col-duration">23.57</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:54:47.676474</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140547.py::test_c140547</td>
+          <td>None</td>
+          <td class="col-duration">43.34</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:55:19.061269</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140548.py::test_c140548</td>
+          <td>None</td>
+          <td class="col-duration">31.38</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:56:14.827459</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140550.py::test_c140550</td>
+          <td>None</td>
+          <td class="col-duration">55.76</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:56:28.717254</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140554.py::test_c140554</td>
+          <td>None</td>
+          <td class="col-duration">13.89</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:56:42.941067</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140555.py::test_c140555</td>
+          <td>None</td>
+          <td class="col-duration">14.22</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:57:12.035731</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140560.py::test_c140560</td>
+          <td>None</td>
+          <td class="col-duration">29.09</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:58:09.831037</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140561.py::test_c140561</td>
+          <td>None</td>
+          <td class="col-duration">57.79</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:58:37.257606</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140574.py::test_c140574</td>
+          <td>None</td>
+          <td class="col-duration">27.42</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:58:52.764493</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140575.py::test_c140575</td>
+          <td>None</td>
+          <td class="col-duration">15.50</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:59:07.868357</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140576.py::test_c140576</td>
+          <td>None</td>
+          <td class="col-duration">15.10</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:59:20.049053</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140577.py::test_c140577</td>
+          <td>None</td>
+          <td class="col-duration">12.18</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:59:27.728492</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140578.py::test_c140578</td>
+          <td>None</td>
+          <td class="col-duration">7.67</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:59:35.146917</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140579.py::test_c140579</td>
+          <td>None</td>
+          <td class="col-duration">7.42</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 12:59:46.267553</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140580.py::test_c140580</td>
+          <td>None</td>
+          <td class="col-duration">11.12</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 13:00:04.705607</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140581.py::test_c140581</td>
+          <td>None</td>
+          <td class="col-duration">18.43</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 13:00:15.947250</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140582.py::test_c140582</td>
+          <td>None</td>
+          <td class="col-duration">11.24</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 13:00:57.459625</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140583.py::test_c140583</td>
+          <td>None</td>
+          <td class="col-duration">38.89</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>

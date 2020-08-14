@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <style>body {
+	font-family: Helvetica, Arial, sans-serif;
+	font-size: 12px;
+	min-width: 1200px;
+	color: #999;
+}
+
+h1 {
+	font-size: 24px;
+	color: black;
+}
+
+h2 {
+	font-size: 16px;
+	color: black;
+}
+
+p {
+    color: black;
+}
+
+a {
+	color: #999;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+
+#environment td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+}
+
+#environment tr:nth-child(odd) {
+	background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed, .passed .col-result {
+	color: green;
+}
+span.skipped, span.xfailed, span.rerun, .skipped .col-result, .xfailed .col-result, .rerun .col-result {
+	color: orange;
+}
+span.error, span.failed, span.xpassed, .error .col-result, .failed .col-result, .xpassed .col-result  {
+	color: red;
+}
+
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+
+#results-table {
+	border: 1px solid #e6e6e6;
+	color: #999;
+	font-size: 12px;
+	width: 100%
+}
+
+#results-table th, #results-table td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+	text-align: left
+}
+#results-table th {
+	font-weight: bold
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+
+.log:only-child {
+	height: inherit
+}
+.log {
+	background-color: #e6e6e6;
+	border: 1px solid #e6e6e6;
+	color: black;
+	display: block;
+	font-family: "Courier New", Courier, monospace;
+	height: 230px;
+	overflow-y: scroll;
+	padding: 5px;
+	white-space: pre-wrap
+}
+div.image {
+	border: 1px solid #e6e6e6;
+	float: right;
+	height: 240px;
+	margin-left: 5px;
+	overflow: hidden;
+	width: 320px
+}
+div.image img {
+	width: 320px
+}
+.collapsed {
+	display: none;
+}
+.expander::after {
+	content: " (show details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+.collapser::after {
+	content: " (hide details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+	cursor: pointer;
+}
+
+.sort-icon {
+	font-size: 0px;
+	float: left;
+	margin-right: 5px;
+	margin-top: 5px;
+	/*triangle*/
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+}
+
+.inactive .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #E6E6E6;
+}
+
+.asc.active .sort-icon {
+	/*finish triangle*/
+	border-bottom: 8px solid #999;
+}
+
+.desc.active .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>2020-03-05_04_57_08Bridge-Interface_report.html</h1>
+    <p>Report generated on 05-Mar-2020 at 05:50:49 by<a href="https://pypi.python.org/pypi/pytest-html"> pytest-html</a> v1.19.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;3.6.3&apos;, &apos;py&apos;: &apos;1.8.0&apos;, &apos;pluggy&apos;: &apos;0.6.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-7-6.1.7601-SP1</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;rerunfailures&apos;: &apos;4.1&apos;, &apos;metadata&apos;: &apos;1.8.0&apos;, &apos;html&apos;: &apos;1.19.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.0</td></tr></table>
+    <h2>Summary</h2>
+    <p>86 tests ran in 3220.39 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">86 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">1 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable time" col="time">Time</th>
+          <th class="sortable" col="name">Test</th>
+          <th>Description</th>
+          <th class="sortable numeric" col="duration">Duration</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="5">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-04 21:16:03.597705</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140489.py::test_c140489</td>
+          <td>None</td>
+          <td class="col-duration">77.82</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;41e4dc13e4d0d252715e9c1b0cbb87eb&quot;)&gt;<br/><br/>    def test_c140489(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;work-mode transparent&quot;)<br/>    		get_into_bri_jyl(browser)<br/>    		webinfo1 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[2]/td[4]&#x27;).text.rstrip()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		time.sleep(1)<br/>    		try:<br/>&gt;   			assert interface_name_5 + &quot; &quot; + interface_name_6 == webinfo1<br/><span class="error">E      AssertionError: assert &#x27;ge0/5 ge0/6&#x27; == &#x27;ge0/6&#x27;</span><br/><span class="error">E        - ge0/5 ge0/6</span><br/><span class="error">E        + ge0/6</span><br/><br/>test_case\scg\scg_Bridge-Interface\test_c140489.py:39: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;41e4dc13e4d0d252715e9c1b0cbb87eb&quot;)&gt;<br/><br/>    def test_c140489(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;work-mode transparent&quot;)<br/>    		get_into_bri_jyl(browser)<br/>    		webinfo1 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[2]/td[4]&#x27;).text.rstrip()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		time.sleep(1)<br/>    		try:<br/>    			assert interface_name_5 + &quot; &quot; + interface_name_6 == webinfo1<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>&gt;   			assert interface_name_5 + &quot; &quot; + interface_name_6 == webinfo1<br/><span class="error">E      AssertionError: assert &#x27;ge0/5 ge0/6&#x27; == &#x27;ge0/6&#x27;</span><br/><span class="error">E        - ge0/5 ge0/6</span><br/><span class="error">E        + ge0/6</span><br/><br/>test_case\scg\scg_Bridge-Interface\test_c140489.py:43: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;41e4dc13e4d0d252715e9c1b0cbb87eb&quot;)&gt;<br/><br/>    def test_c140489(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;work-mode transparent&quot;)<br/>    		get_into_bri_jyl(browser)<br/>    		webinfo1 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[2]/td[4]&#x27;).text.rstrip()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		time.sleep(1)<br/>    		try:<br/>    			assert interface_name_5 + &quot; &quot; + interface_name_6 == webinfo1<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert interface_name_5 + &quot; &quot; + interface_name_6 == webinfo1<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_Bridge-Interface\test_c140489.py:49: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:58:11.480384</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c130459.py::test_main</td>
+          <td>None</td>
+          <td class="col-duration">54.92</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:58:20.385893</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140436.py::test_c140436</td>
+          <td>None</td>
+          <td class="col-duration">8.90</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:58:38.906952</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140437.py::test_c140437</td>
+          <td>None</td>
+          <td class="col-duration">18.52</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:59:21.439385</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140438.py::test_c140438</td>
+          <td>None</td>
+          <td class="col-duration">42.53</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:00:16.791551</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140439.py::test_c140439</td>
+          <td>None</td>
+          <td class="col-duration">55.35</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:00:49.939447</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140440.py::test_c140440</td>
+          <td>None</td>
+          <td class="col-duration">33.14</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:01:14.855872</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140441.py::test_c140441</td>
+          <td>None</td>
+          <td class="col-duration">24.91</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:01:30.466765</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140442.py::test_c140442</td>
+          <td>None</td>
+          <td class="col-duration">15.61</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:03:50.076750</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140443.py::test_c140443</td>
+          <td>None</td>
+          <td class="col-duration">139.60</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:04:10.722931</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140445.py::test_c140445</td>
+          <td>None</td>
+          <td class="col-duration">20.64</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:04:34.267278</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140446.py::test_c140446</td>
+          <td>None</td>
+          <td class="col-duration">23.54</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:04:51.850284</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140447.py::test_c140447</td>
+          <td>None</td>
+          <td class="col-duration">17.58</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:05:09.270280</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140448.py::test_c140448</td>
+          <td>None</td>
+          <td class="col-duration">17.42</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:05:33.204649</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140449.py::test_c140449</td>
+          <td>None</td>
+          <td class="col-duration">23.93</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:05:52.063728</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140450.py::test_c140450</td>
+          <td>None</td>
+          <td class="col-duration">18.86</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:06:04.388433</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140453.py::test_c140453</td>
+          <td>None</td>
+          <td class="col-duration">12.32</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:06:21.827430</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140454.py::test_c140454</td>
+          <td>None</td>
+          <td class="col-duration">17.43</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:06:45.891806</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140455.py::test_c140455</td>
+          <td>None</td>
+          <td class="col-duration">24.06</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:07:03.531815</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140456.py::test_c140456</td>
+          <td>None</td>
+          <td class="col-duration">17.64</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:07:21.198826</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140463.py::test_c140463</td>
+          <td>None</td>
+          <td class="col-duration">17.66</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:07:40.106907</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140464.py::test_c140464</td>
+          <td>None</td>
+          <td class="col-duration">18.91</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:07:59.781033</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140465.py::test_c140465</td>
+          <td>None</td>
+          <td class="col-duration">19.67</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:08:22.936357</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140466.py::test_c140466</td>
+          <td>None</td>
+          <td class="col-duration">23.15</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:08:46.694716</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140467.py::test_c140467</td>
+          <td>None</td>
+          <td class="col-duration">23.76</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:09:15.157344</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140468.py::test_c140468</td>
+          <td>None</td>
+          <td class="col-duration">28.46</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:09:32.157316</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140469.py::test_c140469</td>
+          <td>None</td>
+          <td class="col-duration">17.00</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:09:56.371701</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140470.py::test_c140470</td>
+          <td>None</td>
+          <td class="col-duration">24.21</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:10:43.117375</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140471.py::test_c140471</td>
+          <td>None</td>
+          <td class="col-duration">46.74</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:11:01.222410</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140472.py::test_c140472</td>
+          <td>None</td>
+          <td class="col-duration">18.10</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:11:19.720468</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140473.py::test_c140473</td>
+          <td>None</td>
+          <td class="col-duration">18.49</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:12:00.452798</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140474.py::test_c140474</td>
+          <td>None</td>
+          <td class="col-duration">40.73</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:13:08.399685</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140475.py::test_c140475</td>
+          <td>None</td>
+          <td class="col-duration">67.94</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:13:26.870741</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140476.py::test_c140476</td>
+          <td>None</td>
+          <td class="col-duration">18.47</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:13:44.677760</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140477.py::test_c140477</td>
+          <td>None</td>
+          <td class="col-duration">17.80</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:14:21.730879</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140484.py::test_c140484</td>
+          <td>None</td>
+          <td class="col-duration">37.05</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:14:45.731252</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140485.py::test_c140485</td>
+          <td>None</td>
+          <td class="col-duration">23.99</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:16:14.089305</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140489.py::test_c140489</td>
+          <td>None</td>
+          <td class="col-duration">10.49</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:16:30.520245</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140490.py::test_c140490</td>
+          <td>None</td>
+          <td class="col-duration">16.43</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:18:03.942589</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140491.py::test_c140491</td>
+          <td>None</td>
+          <td class="col-duration">93.42</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:18:47.609086</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140492.py::test_c140492</td>
+          <td>None</td>
+          <td class="col-duration">43.66</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:19:51.730754</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140498.py::test_c140498</td>
+          <td>None</td>
+          <td class="col-duration">64.12</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:20:34.481199</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140499.py::test_c140499</td>
+          <td>None</td>
+          <td class="col-duration">42.75</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:21:01.604750</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140500.py::test_c140500</td>
+          <td>None</td>
+          <td class="col-duration">27.12</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:21:16.803620</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140501.py::test_c140501</td>
+          <td>None</td>
+          <td class="col-duration">15.19</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:26:38.431016</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140505.py::test_c140505</td>
+          <td>None</td>
+          <td class="col-duration">321.62</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:27:50.733151</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140507.py::test_c140507</td>
+          <td>None</td>
+          <td class="col-duration">72.30</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:28:49.046486</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140510.py::test_c140510</td>
+          <td>None</td>
+          <td class="col-duration">58.31</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:29:14.913966</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140511.py::test_c140511</td>
+          <td>None</td>
+          <td class="col-duration">25.86</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:29:52.083092</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140512.py::test_c140512</td>
+          <td>None</td>
+          <td class="col-duration">37.17</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:30:21.866796</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140513.py::test_c140513</td>
+          <td>None</td>
+          <td class="col-duration">29.78</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:31:28.758622</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140516.py::test_c140516</td>
+          <td>None</td>
+          <td class="col-duration">66.89</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:32:00.827456</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140517.py::test_c140517</td>
+          <td>None</td>
+          <td class="col-duration">32.06</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:32:58.404749</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140518.py::test_c140518</td>
+          <td>None</td>
+          <td class="col-duration">57.57</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:33:19.994984</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140519.py::test_c140519</td>
+          <td>None</td>
+          <td class="col-duration">21.59</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:33:45.018415</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140521.py::test_c140521</td>
+          <td>None</td>
+          <td class="col-duration">25.02</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:34:53.781348</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140522.py::test_c140522</td>
+          <td>None</td>
+          <td class="col-duration">68.76</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:35:39.977990</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140523.py::test_c140523</td>
+          <td>None</td>
+          <td class="col-duration">46.19</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:35:50.757607</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140524.py::test_c140524</td>
+          <td>None</td>
+          <td class="col-duration">10.77</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:36:50.200007</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140525.py::test_c140525</td>
+          <td>None</td>
+          <td class="col-duration">59.44</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:37:48.204325</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140526.py::test_c140526</td>
+          <td>None</td>
+          <td class="col-duration">58.00</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:38:35.111007</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140527.py::test_c140527</td>
+          <td>None</td>
+          <td class="col-duration">46.90</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:39:21.771676</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140528.py::test_c140528</td>
+          <td>None</td>
+          <td class="col-duration">46.66</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:40:03.774079</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140531.py::test_c140531</td>
+          <td>None</td>
+          <td class="col-duration">42.00</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:40:47.555583</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140532.py::test_c140532</td>
+          <td>None</td>
+          <td class="col-duration">43.76</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:41:05.822628</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140540.py::test_c140540</td>
+          <td>None</td>
+          <td class="col-duration">18.26</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:41:29.947008</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140541.py::test_c140541</td>
+          <td>None</td>
+          <td class="col-duration">24.11</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:41:56.253512</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140542.py::test_c140542</td>
+          <td>None</td>
+          <td class="col-duration">26.30</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:42:29.287402</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140543.py::test_c140543</td>
+          <td>None</td>
+          <td class="col-duration">33.03</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:42:56.256944</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140544.py::test_c140544</td>
+          <td>None</td>
+          <td class="col-duration">26.97</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:43:42.218573</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140547.py::test_c140547</td>
+          <td>None</td>
+          <td class="col-duration">45.96</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:44:14.784436</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140548.py::test_c140548</td>
+          <td>None</td>
+          <td class="col-duration">32.56</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:45:11.565683</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140550.py::test_c140550</td>
+          <td>None</td>
+          <td class="col-duration">56.78</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:45:29.759724</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140554.py::test_c140554</td>
+          <td>None</td>
+          <td class="col-duration">18.19</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:45:48.773812</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140555.py::test_c140555</td>
+          <td>None</td>
+          <td class="col-duration">19.01</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:46:23.596803</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140560.py::test_c140560</td>
+          <td>None</td>
+          <td class="col-duration">34.82</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:47:30.200613</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140561.py::test_c140561</td>
+          <td>None</td>
+          <td class="col-duration">66.60</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:48:01.831422</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140574.py::test_c140574</td>
+          <td>None</td>
+          <td class="col-duration">31.63</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:48:19.719445</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140575.py::test_c140575</td>
+          <td>None</td>
+          <td class="col-duration">17.88</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:48:38.072495</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140576.py::test_c140576</td>
+          <td>None</td>
+          <td class="col-duration">18.35</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:48:53.605383</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140577.py::test_c140577</td>
+          <td>None</td>
+          <td class="col-duration">15.53</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:49:03.472948</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140578.py::test_c140578</td>
+          <td>None</td>
+          <td class="col-duration">9.86</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:49:12.858485</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140579.py::test_c140579</td>
+          <td>None</td>
+          <td class="col-duration">9.38</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:49:27.165303</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140580.py::test_c140580</td>
+          <td>None</td>
+          <td class="col-duration">14.30</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:49:49.510581</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140581.py::test_c140581</td>
+          <td>None</td>
+          <td class="col-duration">22.34</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:50:03.610387</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140582.py::test_c140582</td>
+          <td>None</td>
+          <td class="col-duration">14.09</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 21:50:49.749026</td>
+          <td class="col-name">test_case/scg/scg_Bridge-Interface/test_c140583.py::test_c140583</td>
+          <td>None</td>
+          <td class="col-duration">43.61</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>

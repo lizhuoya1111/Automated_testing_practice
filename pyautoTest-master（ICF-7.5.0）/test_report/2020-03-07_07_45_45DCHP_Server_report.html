@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <style>body {
+	font-family: Helvetica, Arial, sans-serif;
+	font-size: 12px;
+	min-width: 1200px;
+	color: #999;
+}
+
+h1 {
+	font-size: 24px;
+	color: black;
+}
+
+h2 {
+	font-size: 16px;
+	color: black;
+}
+
+p {
+    color: black;
+}
+
+a {
+	color: #999;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+
+#environment td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+}
+
+#environment tr:nth-child(odd) {
+	background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed, .passed .col-result {
+	color: green;
+}
+span.skipped, span.xfailed, span.rerun, .skipped .col-result, .xfailed .col-result, .rerun .col-result {
+	color: orange;
+}
+span.error, span.failed, span.xpassed, .error .col-result, .failed .col-result, .xpassed .col-result  {
+	color: red;
+}
+
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+
+#results-table {
+	border: 1px solid #e6e6e6;
+	color: #999;
+	font-size: 12px;
+	width: 100%
+}
+
+#results-table th, #results-table td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+	text-align: left
+}
+#results-table th {
+	font-weight: bold
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+
+.log:only-child {
+	height: inherit
+}
+.log {
+	background-color: #e6e6e6;
+	border: 1px solid #e6e6e6;
+	color: black;
+	display: block;
+	font-family: "Courier New", Courier, monospace;
+	height: 230px;
+	overflow-y: scroll;
+	padding: 5px;
+	white-space: pre-wrap
+}
+div.image {
+	border: 1px solid #e6e6e6;
+	float: right;
+	height: 240px;
+	margin-left: 5px;
+	overflow: hidden;
+	width: 320px
+}
+div.image img {
+	width: 320px
+}
+.collapsed {
+	display: none;
+}
+.expander::after {
+	content: " (show details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+.collapser::after {
+	content: " (hide details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+	cursor: pointer;
+}
+
+.sort-icon {
+	font-size: 0px;
+	float: left;
+	margin-right: 5px;
+	margin-top: 5px;
+	/*triangle*/
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+}
+
+.inactive .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #E6E6E6;
+}
+
+.asc.active .sort-icon {
+	/*finish triangle*/
+	border-bottom: 8px solid #999;
+}
+
+.desc.active .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>2020-03-07_07_45_45DCHP_Server_report.html</h1>
+    <p>Report generated on 07-Mar-2020 at 08:53:53 by<a href="https://pypi.python.org/pypi/pytest-html"> pytest-html</a> v1.19.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;3.6.3&apos;, &apos;py&apos;: &apos;1.8.0&apos;, &apos;pluggy&apos;: &apos;0.6.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-7-6.1.7601-SP1</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;rerunfailures&apos;: &apos;4.1&apos;, &apos;metadata&apos;: &apos;1.8.0&apos;, &apos;html&apos;: &apos;1.19.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.0</td></tr></table>
+    <h2>Summary</h2>
+    <p>68 tests ran in 4087.39 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">66 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">2 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">5 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable time" col="time">Time</th>
+          <th class="sortable" col="name">Test</th>
+          <th>Description</th>
+          <th class="sortable numeric" col="duration">Duration</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="5">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-time">2020-03-07 00:21:19.598099</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139245.py::test_c139245</td>
+          <td>None</td>
+          <td class="col-duration">230.47</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139245(browser):<br/>    	try:<br/>    		login_web(browser, url=dev4)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_2, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;34.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;117.117.117.117&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;34.1.1.5&quot;, ip_range1_2=&quot;34.1.1.20&quot;)<br/>    		b = Shell_SSH()<br/>    		b.connect(dev4)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;conf t&quot;)<br/>    		b.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		b.execute(&quot;dhcp-server gateway 24.1.1.254 255.255.255.0&quot;)<br/>    		b.execute(&quot;dhcp-server address 24.1.1.5 24.1.1.20&quot;)<br/>    		b.execute(&quot;dhcp-server enable&quot;)<br/>    		b.execute(&quot;exit&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;no ip address 24.1.1.2&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;no ip address 34.1.1.3&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		login_web(browser, url=dev2)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_3)<br/>    <br/>    		login_web(browser, url=dev3)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_3)<br/>    		login_web(browser, url=dev4)<br/>    		get_into_dhcp_lease(browser)<br/>    		time.sleep(1)<br/>    		# 主机的ip地址<br/>    		webinfo1 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[2]/td[2]&#x27;).text.rstrip()<br/>    		# print(webinfo1)<br/>    		time.sleep(1)<br/>    		# 主机的ip地址<br/>    		webinfo2 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[3]/td[2]&#x27;).text.rstrip()<br/>    		# nprint(webinfo2)<br/>    <br/>    		login_web(browser, url=dev2)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_3, ip=&#x27;24.1.1.2&#x27;, mask=&#x27;24&#x27;)<br/>    		login_web(browser, url=dev3)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_3, ip=&#x27;34.1.1.3&#x27;, mask=&#x27;24&#x27;)<br/>    		time.sleep(1)<br/>    		login_web(browser, url=dev4)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>&gt;   			assert &quot;34.1.1.5&quot; == webinfo1<br/><span class="error">E      AssertionError: assert &#x27;34.1.1.5&#x27; == &#x27;34.1.1.6&#x27;</span><br/><span class="error">E        - 34.1.1.5</span><br/><span class="error">E        ?        ^</span><br/><span class="error">E        + 34.1.1.6</span><br/><span class="error">E        ?        ^</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139245.py:75: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139245(browser):<br/>    	try:<br/>    		login_web(browser, url=dev4)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_2, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;34.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;117.117.117.117&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;34.1.1.5&quot;, ip_range1_2=&quot;34.1.1.20&quot;)<br/>    		b = Shell_SSH()<br/>    		b.connect(dev4)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;conf t&quot;)<br/>    		b.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		b.execute(&quot;dhcp-server gateway 24.1.1.254 255.255.255.0&quot;)<br/>    		b.execute(&quot;dhcp-server address 24.1.1.5 24.1.1.20&quot;)<br/>    		b.execute(&quot;dhcp-server enable&quot;)<br/>    		b.execute(&quot;exit&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;no ip address 24.1.1.2&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;no ip address 34.1.1.3&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		login_web(browser, url=dev2)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_3)<br/>    <br/>    		login_web(browser, url=dev3)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_3)<br/>    		login_web(browser, url=dev4)<br/>    		get_into_dhcp_lease(browser)<br/>    		time.sleep(1)<br/>    		# 主机的ip地址<br/>    		webinfo1 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[2]/td[2]&#x27;).text.rstrip()<br/>    		# print(webinfo1)<br/>    		time.sleep(1)<br/>    		# 主机的ip地址<br/>    		webinfo2 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[3]/td[2]&#x27;).text.rstrip()<br/>    		# nprint(webinfo2)<br/>    <br/>    		login_web(browser, url=dev2)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_3, ip=&#x27;24.1.1.2&#x27;, mask=&#x27;24&#x27;)<br/>    		login_web(browser, url=dev3)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_3, ip=&#x27;34.1.1.3&#x27;, mask=&#x27;24&#x27;)<br/>    		time.sleep(1)<br/>    		login_web(browser, url=dev4)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>    			assert &quot;34.1.1.5&quot; == webinfo1<br/>    			assert &quot;24.1.1.5&quot; == webinfo2<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>&gt;   			assert &quot;34.1.1.5&quot; == webinfo1<br/><span class="error">E      AssertionError: assert &#x27;34.1.1.5&#x27; == &#x27;34.1.1.6&#x27;</span><br/><span class="error">E        - 34.1.1.5</span><br/><span class="error">E        ?        ^</span><br/><span class="error">E        + 34.1.1.6</span><br/><span class="error">E        ?        ^</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139245.py:80: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139245(browser):<br/>    	try:<br/>    		login_web(browser, url=dev4)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_2, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;34.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;117.117.117.117&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;34.1.1.5&quot;, ip_range1_2=&quot;34.1.1.20&quot;)<br/>    		b = Shell_SSH()<br/>    		b.connect(dev4)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;conf t&quot;)<br/>    		b.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		b.execute(&quot;dhcp-server gateway 24.1.1.254 255.255.255.0&quot;)<br/>    		b.execute(&quot;dhcp-server address 24.1.1.5 24.1.1.20&quot;)<br/>    		b.execute(&quot;dhcp-server enable&quot;)<br/>    		b.execute(&quot;exit&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;no ip address 24.1.1.2&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;no ip address 34.1.1.3&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		login_web(browser, url=dev2)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_3)<br/>    <br/>    		login_web(browser, url=dev3)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_3)<br/>    		login_web(browser, url=dev4)<br/>    		get_into_dhcp_lease(browser)<br/>    		time.sleep(1)<br/>    		# 主机的ip地址<br/>    		webinfo1 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[2]/td[2]&#x27;).text.rstrip()<br/>    		# print(webinfo1)<br/>    		time.sleep(1)<br/>    		# 主机的ip地址<br/>    		webinfo2 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[3]/td[2]&#x27;).text.rstrip()<br/>    		# nprint(webinfo2)<br/>    <br/>    		login_web(browser, url=dev2)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_3, ip=&#x27;24.1.1.2&#x27;, mask=&#x27;24&#x27;)<br/>    		login_web(browser, url=dev3)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_3, ip=&#x27;34.1.1.3&#x27;, mask=&#x27;24&#x27;)<br/>    		time.sleep(1)<br/>    		login_web(browser, url=dev4)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>    			assert &quot;34.1.1.5&quot; == webinfo1<br/>    			assert &quot;24.1.1.5&quot; == webinfo2<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;34.1.1.5&quot; == webinfo1<br/>    			assert &quot;24.1.1.5&quot; == webinfo2<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>    		reload([dev2, dev3, dev4])<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139245.py:88: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-time">2020-03-07 00:26:48.900934</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139248.py::test_c139248</td>
+          <td>None</td>
+          <td class="col-duration">166.47</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139248(browser):<br/>    	try:<br/>    		login_web(browser, url=dev3)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_3, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;34.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;117.117.117.117&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;34.1.1.5&quot;, ip_range1_2=&quot;34.1.1.20&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev4)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 34.1.1.4&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		login_web(browser, url=dev4)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_2)<br/>    <br/>    		b = Shell_SSH()<br/>    		b.connect(dev5)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;conf t&quot;)<br/>    		b.execute(&quot;ip route 34.1.1.0/24 gateway 45.1.1.4&quot;)<br/>    		b.execute(&quot;exit&quot;)<br/>    <br/>    		b = Shell_SSH()<br/>    		b.connect(dev4)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;ping 45.1.1.5&quot;)<br/>    		result = b.output()<br/>    		print(result)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev5)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;no ip route 34.1.1.0/24 gateway 45.1.1.4&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		login_web(browser, url=dev4)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_2, ip=&#x27;34.1.1.4&#x27;, mask=&#x27;24&#x27;)<br/>    		time.sleep(1)<br/>    		login_web(browser, url=dev3)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>&gt;   			assert &quot;ms&quot; in result<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;BSAFE&gt;en\r\nBSAFE#ping 45.1.1.5\r\npval.type_str ping\r\nPING 45.1.1.5 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 45.1.1.5 icmp_seq=1  Destination Host Unreachable\r\n&#x27;</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139248.py:59: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139248(browser):<br/>    	try:<br/>    		login_web(browser, url=dev3)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_3, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;34.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;117.117.117.117&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;34.1.1.5&quot;, ip_range1_2=&quot;34.1.1.20&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev4)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 34.1.1.4&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		login_web(browser, url=dev4)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_2)<br/>    <br/>    		b = Shell_SSH()<br/>    		b.connect(dev5)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;conf t&quot;)<br/>    		b.execute(&quot;ip route 34.1.1.0/24 gateway 45.1.1.4&quot;)<br/>    		b.execute(&quot;exit&quot;)<br/>    <br/>    		b = Shell_SSH()<br/>    		b.connect(dev4)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;ping 45.1.1.5&quot;)<br/>    		result = b.output()<br/>    		print(result)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev5)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;no ip route 34.1.1.0/24 gateway 45.1.1.4&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		login_web(browser, url=dev4)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_2, ip=&#x27;34.1.1.4&#x27;, mask=&#x27;24&#x27;)<br/>    		time.sleep(1)<br/>    		login_web(browser, url=dev3)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>    			assert &quot;ms&quot; in result<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>&gt;   			assert &quot;ms&quot; in result<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;BSAFE&gt;en\r\nBSAFE#ping 45.1.1.5\r\npval.type_str ping\r\nPING 45.1.1.5 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 45.1.1.5 icmp_seq=1  Destination Host Unreachable\r\n&#x27;</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139248.py:63: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139248(browser):<br/>    	try:<br/>    		login_web(browser, url=dev3)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_3, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;34.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;117.117.117.117&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;34.1.1.5&quot;, ip_range1_2=&quot;34.1.1.20&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev4)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 34.1.1.4&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		login_web(browser, url=dev4)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_2)<br/>    <br/>    		b = Shell_SSH()<br/>    		b.connect(dev5)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;conf t&quot;)<br/>    		b.execute(&quot;ip route 34.1.1.0/24 gateway 45.1.1.4&quot;)<br/>    		b.execute(&quot;exit&quot;)<br/>    <br/>    		b = Shell_SSH()<br/>    		b.connect(dev4)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;ping 45.1.1.5&quot;)<br/>    		result = b.output()<br/>    		print(result)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev5)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;no ip route 34.1.1.0/24 gateway 45.1.1.4&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		login_web(browser, url=dev4)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_2, ip=&#x27;34.1.1.4&#x27;, mask=&#x27;24&#x27;)<br/>    		time.sleep(1)<br/>    		login_web(browser, url=dev3)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>    			assert &quot;ms&quot; in result<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>    		reload([dev3, dev4, dev5])<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139248.py:70: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-07 00:17:29.086914</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139245.py::test_c139245</td>
+          <td>None</td>
+          <td class="col-duration">228.04</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139245(browser):<br/>    	try:<br/>    		login_web(browser, url=dev4)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_2, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;34.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;117.117.117.117&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;34.1.1.5&quot;, ip_range1_2=&quot;34.1.1.20&quot;)<br/>    		b = Shell_SSH()<br/>    		b.connect(dev4)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;conf t&quot;)<br/>    		b.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		b.execute(&quot;dhcp-server gateway 24.1.1.254 255.255.255.0&quot;)<br/>    		b.execute(&quot;dhcp-server address 24.1.1.5 24.1.1.20&quot;)<br/>    		b.execute(&quot;dhcp-server enable&quot;)<br/>    		b.execute(&quot;exit&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;no ip address 24.1.1.2&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;no ip address 34.1.1.3&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		login_web(browser, url=dev2)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_3)<br/>    <br/>    		login_web(browser, url=dev3)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_3)<br/>    		login_web(browser, url=dev4)<br/>    		get_into_dhcp_lease(browser)<br/>    		time.sleep(1)<br/>    		# 主机的ip地址<br/>    		webinfo1 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[2]/td[2]&#x27;).text.rstrip()<br/>    		# print(webinfo1)<br/>    		time.sleep(1)<br/>    		# 主机的ip地址<br/>    		webinfo2 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[3]/td[2]&#x27;).text.rstrip()<br/>    		# nprint(webinfo2)<br/>    <br/>    		login_web(browser, url=dev2)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_3, ip=&#x27;24.1.1.2&#x27;, mask=&#x27;24&#x27;)<br/>    		login_web(browser, url=dev3)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_3, ip=&#x27;34.1.1.3&#x27;, mask=&#x27;24&#x27;)<br/>    		time.sleep(1)<br/>    		login_web(browser, url=dev4)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>&gt;   			assert &quot;34.1.1.5&quot; == webinfo1<br/><span class="error">E      AssertionError: assert &#x27;34.1.1.5&#x27; == &#x27;34.1.1.6&#x27;</span><br/><span class="error">E        - 34.1.1.5</span><br/><span class="error">E        ?        ^</span><br/><span class="error">E        + 34.1.1.6</span><br/><span class="error">E        ?        ^</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139245.py:75: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139245(browser):<br/>    	try:<br/>    		login_web(browser, url=dev4)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_2, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;34.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;117.117.117.117&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;34.1.1.5&quot;, ip_range1_2=&quot;34.1.1.20&quot;)<br/>    		b = Shell_SSH()<br/>    		b.connect(dev4)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;conf t&quot;)<br/>    		b.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		b.execute(&quot;dhcp-server gateway 24.1.1.254 255.255.255.0&quot;)<br/>    		b.execute(&quot;dhcp-server address 24.1.1.5 24.1.1.20&quot;)<br/>    		b.execute(&quot;dhcp-server enable&quot;)<br/>    		b.execute(&quot;exit&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;no ip address 24.1.1.2&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;no ip address 34.1.1.3&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		login_web(browser, url=dev2)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_3)<br/>    <br/>    		login_web(browser, url=dev3)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_3)<br/>    		login_web(browser, url=dev4)<br/>    		get_into_dhcp_lease(browser)<br/>    		time.sleep(1)<br/>    		# 主机的ip地址<br/>    		webinfo1 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[2]/td[2]&#x27;).text.rstrip()<br/>    		# print(webinfo1)<br/>    		time.sleep(1)<br/>    		# 主机的ip地址<br/>    		webinfo2 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[3]/td[2]&#x27;).text.rstrip()<br/>    		# nprint(webinfo2)<br/>    <br/>    		login_web(browser, url=dev2)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_3, ip=&#x27;24.1.1.2&#x27;, mask=&#x27;24&#x27;)<br/>    		login_web(browser, url=dev3)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_3, ip=&#x27;34.1.1.3&#x27;, mask=&#x27;24&#x27;)<br/>    		time.sleep(1)<br/>    		login_web(browser, url=dev4)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>    			assert &quot;34.1.1.5&quot; == webinfo1<br/>    			assert &quot;24.1.1.5&quot; == webinfo2<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>&gt;   			assert &quot;34.1.1.5&quot; == webinfo1<br/><span class="error">E      AssertionError: assert &#x27;34.1.1.5&#x27; == &#x27;34.1.1.6&#x27;</span><br/><span class="error">E        - 34.1.1.5</span><br/><span class="error">E        ?        ^</span><br/><span class="error">E        + 34.1.1.6</span><br/><span class="error">E        ?        ^</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139245.py:80: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139245(browser):<br/>    	try:<br/>    		login_web(browser, url=dev4)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_2, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;34.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;117.117.117.117&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;34.1.1.5&quot;, ip_range1_2=&quot;34.1.1.20&quot;)<br/>    		b = Shell_SSH()<br/>    		b.connect(dev4)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;conf t&quot;)<br/>    		b.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		b.execute(&quot;dhcp-server gateway 24.1.1.254 255.255.255.0&quot;)<br/>    		b.execute(&quot;dhcp-server address 24.1.1.5 24.1.1.20&quot;)<br/>    		b.execute(&quot;dhcp-server enable&quot;)<br/>    		b.execute(&quot;exit&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;no ip address 24.1.1.2&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;no ip address 34.1.1.3&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		login_web(browser, url=dev2)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_3)<br/>    <br/>    		login_web(browser, url=dev3)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_3)<br/>    		login_web(browser, url=dev4)<br/>    		get_into_dhcp_lease(browser)<br/>    		time.sleep(1)<br/>    		# 主机的ip地址<br/>    		webinfo1 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[2]/td[2]&#x27;).text.rstrip()<br/>    		# print(webinfo1)<br/>    		time.sleep(1)<br/>    		# 主机的ip地址<br/>    		webinfo2 = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[3]/td[2]&#x27;).text.rstrip()<br/>    		# nprint(webinfo2)<br/>    <br/>    		login_web(browser, url=dev2)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_3, ip=&#x27;24.1.1.2&#x27;, mask=&#x27;24&#x27;)<br/>    		login_web(browser, url=dev3)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_3, ip=&#x27;34.1.1.3&#x27;, mask=&#x27;24&#x27;)<br/>    		time.sleep(1)<br/>    		login_web(browser, url=dev4)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>    			assert &quot;34.1.1.5&quot; == webinfo1<br/>    			assert &quot;24.1.1.5&quot; == webinfo2<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;34.1.1.5&quot; == webinfo1<br/>    			assert &quot;24.1.1.5&quot; == webinfo2<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>    		reload([dev2, dev3, dev4])<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139245.py:88: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-07 00:24:02.403411</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139248.py::test_c139248</td>
+          <td>None</td>
+          <td class="col-duration">162.77</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139248(browser):<br/>    	try:<br/>    		login_web(browser, url=dev3)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_3, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;34.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;117.117.117.117&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;34.1.1.5&quot;, ip_range1_2=&quot;34.1.1.20&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev4)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 34.1.1.4&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		login_web(browser, url=dev4)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_2)<br/>    <br/>    		b = Shell_SSH()<br/>    		b.connect(dev5)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;conf t&quot;)<br/>    		b.execute(&quot;ip route 34.1.1.0/24 gateway 45.1.1.4&quot;)<br/>    		b.execute(&quot;exit&quot;)<br/>    <br/>    		b = Shell_SSH()<br/>    		b.connect(dev4)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;ping 45.1.1.5&quot;)<br/>    		result = b.output()<br/>    		print(result)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev5)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;no ip route 34.1.1.0/24 gateway 45.1.1.4&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		login_web(browser, url=dev4)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_2, ip=&#x27;34.1.1.4&#x27;, mask=&#x27;24&#x27;)<br/>    		time.sleep(1)<br/>    		login_web(browser, url=dev3)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>&gt;   			assert &quot;ms&quot; in result<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;BSAFE&gt;en\r\nBSAFE#ping 45.1.1.5\r\npval.type_str ping\r\nPING 45.1.1.5 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 45.1.1.5 icmp_seq=1  Destination Host Unreachable\r\n&#x27;</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139248.py:59: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139248(browser):<br/>    	try:<br/>    		login_web(browser, url=dev3)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_3, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;34.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;117.117.117.117&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;34.1.1.5&quot;, ip_range1_2=&quot;34.1.1.20&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev4)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 34.1.1.4&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		login_web(browser, url=dev4)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_2)<br/>    <br/>    		b = Shell_SSH()<br/>    		b.connect(dev5)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;conf t&quot;)<br/>    		b.execute(&quot;ip route 34.1.1.0/24 gateway 45.1.1.4&quot;)<br/>    		b.execute(&quot;exit&quot;)<br/>    <br/>    		b = Shell_SSH()<br/>    		b.connect(dev4)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;ping 45.1.1.5&quot;)<br/>    		result = b.output()<br/>    		print(result)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev5)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;no ip route 34.1.1.0/24 gateway 45.1.1.4&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		login_web(browser, url=dev4)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_2, ip=&#x27;34.1.1.4&#x27;, mask=&#x27;24&#x27;)<br/>    		time.sleep(1)<br/>    		login_web(browser, url=dev3)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>    			assert &quot;ms&quot; in result<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>&gt;   			assert &quot;ms&quot; in result<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;BSAFE&gt;en\r\nBSAFE#ping 45.1.1.5\r\npval.type_str ping\r\nPING 45.1.1.5 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 45.1.1.5 icmp_seq=1  Destination Host Unreachable\r\n&#x27;</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139248.py:63: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139248(browser):<br/>    	try:<br/>    		login_web(browser, url=dev3)<br/>    		dhcp_server_add_jyl(browser, interface=interface_name_3, dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;34.1.1.254&quot;,<br/>    		                    dhcp_sm=&quot;255.255.255.0&quot;, dns_server1=&quot;117.117.117.117&quot;, wins_server1=&quot;&quot;,<br/>    		                    ip_range1_1=&quot;34.1.1.5&quot;, ip_range1_2=&quot;34.1.1.20&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev4)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 34.1.1.4&quot;)<br/>    		a.execute(&quot;switchmode trunk&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		login_web(browser, url=dev4)<br/>    		time.sleep(1)<br/>    		physical_interface_update_dhcp_jyl(browser, physical_interface=interface_name_2)<br/>    <br/>    		b = Shell_SSH()<br/>    		b.connect(dev5)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;conf t&quot;)<br/>    		b.execute(&quot;ip route 34.1.1.0/24 gateway 45.1.1.4&quot;)<br/>    		b.execute(&quot;exit&quot;)<br/>    <br/>    		b = Shell_SSH()<br/>    		b.connect(dev4)<br/>    		b.execute(&quot;en&quot;)<br/>    		b.execute(&quot;ping 45.1.1.5&quot;)<br/>    		result = b.output()<br/>    		print(result)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev5)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;no ip route 34.1.1.0/24 gateway 45.1.1.4&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    <br/>    		login_web(browser, url=dev4)<br/>    		add_physical_interface_static_ip_jyl(browser, interface=interface_name_2, ip=&#x27;34.1.1.4&#x27;, mask=&#x27;24&#x27;)<br/>    		time.sleep(1)<br/>    		login_web(browser, url=dev3)<br/>    		dhcp_server_edit_or_delete_jyl(browser, fuction=&quot;delete&quot;)<br/>    <br/>    		try:<br/>    			assert &quot;ms&quot; in result<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>    		reload([dev3, dev4, dev5])<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139248.py:70: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-07 00:35:01.386102</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139266.py::test_C139266</td>
+          <td>None</td>
+          <td class="col-duration">119.79</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_C139266(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		add_vlan_inte(browser, physicl_interface=interface_name_3, vlan_id=&quot;22&quot;, work_mode=&quot;route&quot;)<br/>    		time.sleep(2)<br/>    		add_vlan_inte_add(browser, interface_name=interface_name_3+&quot;.22&quot;, ipadd=&quot;131.1.1.1&quot;, mask=&quot;24&quot;)<br/>    		time.sleep(2)<br/>    		dhcp_server_add(browser, interface=interface_name_3+&quot;.22&quot;,<br/>    		                dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;131.1.1.254&quot;, dhcp_sm=&quot;24&quot;,<br/>    		                dns_server1=&quot;114.114.114.114&quot;, wins_server1=&quot;115.115.115.115&quot;,<br/>    		                ip_range1_1=&quot;131.1.1.5&quot;, ip_range1_2=&quot;131.1.1.20&quot;)<br/>    		time.sleep(2)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface vlan &quot;+interface_name_3+&quot;.22&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		time.sleep(0.5)<br/>    		crtinfo = a.output()<br/>    		# print(crtinfo)<br/>    		time.sleep(1)<br/>    		dhcp_server_edit_or_delete(browser, fuction=&quot;delete&quot;)<br/>    		time.sleep(1)<br/>    		del_vlan_inte_all(browser)<br/>    		try:<br/>&gt;   			assert &quot;接口不允许删除&quot; in crtinfo<br/><span class="error">E      AssertionError: assert &#x27;接口不允许删除&#x27; in &#x27;BSAFE&gt;en\r\nBSAFE#conf t\r\nBSAFE(config)#no interface vlan P0.22\r\nBSAFE(config)#exit\r\nBSAFE#&#x27;</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139266.py:44: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_C139266(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		add_vlan_inte(browser, physicl_interface=interface_name_3, vlan_id=&quot;22&quot;, work_mode=&quot;route&quot;)<br/>    		time.sleep(2)<br/>    		add_vlan_inte_add(browser, interface_name=interface_name_3+&quot;.22&quot;, ipadd=&quot;131.1.1.1&quot;, mask=&quot;24&quot;)<br/>    		time.sleep(2)<br/>    		dhcp_server_add(browser, interface=interface_name_3+&quot;.22&quot;,<br/>    		                dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;131.1.1.254&quot;, dhcp_sm=&quot;24&quot;,<br/>    		                dns_server1=&quot;114.114.114.114&quot;, wins_server1=&quot;115.115.115.115&quot;,<br/>    		                ip_range1_1=&quot;131.1.1.5&quot;, ip_range1_2=&quot;131.1.1.20&quot;)<br/>    		time.sleep(2)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface vlan &quot;+interface_name_3+&quot;.22&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		time.sleep(0.5)<br/>    		crtinfo = a.output()<br/>    		# print(crtinfo)<br/>    		time.sleep(1)<br/>    		dhcp_server_edit_or_delete(browser, fuction=&quot;delete&quot;)<br/>    		time.sleep(1)<br/>    		del_vlan_inte_all(browser)<br/>    		try:<br/>    			assert &quot;接口不允许删除&quot; in crtinfo<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>&gt;   			assert &quot;接口不允许删除&quot;in crtinfo<br/><span class="error">E      AssertionError: assert &#x27;接口不允许删除&#x27; in &#x27;BSAFE&gt;en\r\nBSAFE#conf t\r\nBSAFE(config)#no interface vlan P0.22\r\nBSAFE(config)#exit\r\nBSAFE#&#x27;</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139266.py:48: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_C139266(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		add_vlan_inte(browser, physicl_interface=interface_name_3, vlan_id=&quot;22&quot;, work_mode=&quot;route&quot;)<br/>    		time.sleep(2)<br/>    		add_vlan_inte_add(browser, interface_name=interface_name_3+&quot;.22&quot;, ipadd=&quot;131.1.1.1&quot;, mask=&quot;24&quot;)<br/>    		time.sleep(2)<br/>    		dhcp_server_add(browser, interface=interface_name_3+&quot;.22&quot;,<br/>    		                dhcp_type=&quot;dhcp_server&quot;, dhcp_gw=&quot;131.1.1.254&quot;, dhcp_sm=&quot;24&quot;,<br/>    		                dns_server1=&quot;114.114.114.114&quot;, wins_server1=&quot;115.115.115.115&quot;,<br/>    		                ip_range1_1=&quot;131.1.1.5&quot;, ip_range1_2=&quot;131.1.1.20&quot;)<br/>    		time.sleep(2)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface vlan &quot;+interface_name_3+&quot;.22&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		time.sleep(0.5)<br/>    		crtinfo = a.output()<br/>    		# print(crtinfo)<br/>    		time.sleep(1)<br/>    		dhcp_server_edit_or_delete(browser, fuction=&quot;delete&quot;)<br/>    		time.sleep(1)<br/>    		del_vlan_inte_all(browser)<br/>    		try:<br/>    			assert &quot;接口不允许删除&quot; in crtinfo<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;接口不允许删除&quot;in crtinfo<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>    		reload(hostip=dev1)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139266.py:54: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-07 00:46:44.462316</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139300.py::test_c139300</td>
+          <td>None</td>
+          <td class="col-duration">76.30</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139300(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;ip address 131.1.1.1 255.255.255.0&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>&gt;   		into_fun(browser, DHCP设定)<br/><br/>test_case\scg\scg_DCHP_Server\test_c139300.py:25: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/>menu = &#x27;net_dhcp_set&#x27;<br/><br/>    def into_fun(browser, menu):<br/>    	if oem_name == &quot;ICF&quot;:<br/>    <br/>    		# print(&quot;进入ICF导航&quot;)<br/>    		try:<br/>    			# print(&quot;Alert exists&quot;)<br/>    			alert_info = &quot;init&quot;<br/>    			while alert_info is not None:<br/>    				alert = browser.switch_to_alert()<br/>    				alert_info = alert.text<br/>    				print(alert_info)<br/>    				alert.accept()<br/>    		except:<br/>    			# print(&quot;无警告，点击返回&quot;)<br/>    			try:<br/>    				browser.find_element_by_xpath(&#x27;// *[ @ id = &quot;link_but&quot;]&#x27;).click()<br/>    			except:<br/>    				# print(&quot;无点击返回&quot;)<br/>    				pass<br/>    		browser.switch_to.default_content()<br/>    		# 定位到左侧frame<br/>    		browser.switch_to.frame(&quot;lefttree&quot;)<br/>    <br/>    		if menu in [系统状态, 管理员, 系统升级, Web证书, 重启系统, 系统信息, 时间设定, DNS,<br/>    		            配置文件, 高可用性, SNMP设置, SNMP_Trap, 网络诊断, 服务器诊断]:<br/>    			browser.find_element_by_name(系统).click()<br/>    			if menu == 系统状态:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [管理员, 系统升级, Web证书, 重启系统]:<br/>    				if not browser.find_element_by_xpath(display_系统管理).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(系统管理).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [系统信息,  时间设定, DNS, 配置文件, 高可用性, SNMP设置, SNMP_Trap]:<br/>    				if not browser.find_element_by_xpath(display_配置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(配置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [网络诊断, 服务器诊断]:<br/>    				if not browser.find_element_by_xpath(display_诊断工具).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(诊断工具).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [物理接口, 子接口, 网桥, 静态路由, 策略路由, OSPF, ISP自动选择, 多网关组, 路由监控, DHCP设定, DHCP租用列表,<br/>    		              ARP列表, 桥MAC表, IPv6邻居列表, IPv6隧道]:<br/>    			browser.find_element_by_name(网络).click()<br/>    			if menu in [物理接口, 子接口, 网桥]:<br/>    				if not browser.find_element_by_xpath(display_接口设置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(接口设置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [静态路由, 策略路由, OSPF, ISP自动选择, 多网关组, 路由监控]:<br/>    				if not browser.find_element_by_xpath(display_路由).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(路由).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [DHCP设定, DHCP租用列表]:<br/>    				if not browser.find_element_by_xpath(display_DHCP).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(DHCP).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [ARP列表, 桥MAC表, IPv6邻居列表, IPv6隧道]:<br/>    				if not browser.find_element_by_xpath(display_MAC).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(MAC).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [模式切换, 自定义规则, 机器学习, 安全事件, 工业漏洞, ARP防护, 访问策略, IPV6访问策略, 地址, 地址范围,<br/>    		              地址组, IPv6地址, IPv6地址范围, IPv6地址组, 计划任务, 区域, 预定义服务, 自定义服务, 服务组, 目标地址转换,<br/>    		              源地址转换, 负载均衡]:<br/>    			browser.find_element_by_name(安全策略).click()<br/>    			if menu in [模式切换, 自定义规则, 机器学习, 安全事件, 工业漏洞, ARP防护, 访问策略, IPV6访问策略]:<br/>    				if not browser.find_element_by_xpath(display_工业防护策略).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(工业防护策略).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [地址, 地址范围, 地址组, IPv6地址, IPv6地址范围, IPv6地址组, 计划任务, 区域, 预定义服务, 自定义服务,<br/>    			              服务组]:<br/>    				if not browser.find_element_by_xpath(display_对象).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(对象).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [目标地址转换, 源地址转换, 负载均衡]:<br/>    				if not browser.find_element_by_xpath(display_地址转换).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(地址转换).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [主机标识, 应用加密, 手动密钥, 远程网关, 远程访问, 监控, CA证书]:<br/>    			browser.find_element_by_name(虚拟专网).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [Anti_DDoS设置, Anti_DDoS用户配置, Anti_DDoS规则列表, Anti_DDoS黑_白名单]:<br/>    			browser.find_element_by_name(DDoS防护).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [用户配置, 本地用户, 认证组, 认证服务器, 认证用户设置, 认证监控]:<br/>    			browser.find_element_by_name(认证用户).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [日志统计, 日志服务器, 日志过滤, 日志格式, 日志告警, 管理日志, 系统日志, 安全日志, 流量日志]:<br/>    			browser.find_element_by_name(日志).click()<br/>    			if menu == 日志统计:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [日志服务器, 日志过滤, 日志格式, 日志告警]:<br/>    				if not browser.find_element_by_xpath(display_日志设置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(日志设置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [管理日志, 系统日志, 安全日志, 流量日志]:<br/>    				if not browser.find_element_by_xpath(display_日志记录).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(日志记录).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    				time.sleep(2)<br/>    <br/>    		elif menu in [报表设置, 接口统计报表, 流量排行报表, 会话监控报表, 系统状态报表, 事件统计报表, 会话表, Anti_DDoS会话数,<br/>    		              Anti_DDoS会话速率, Anti_DDoS数据包速率, Top_N, 来源IP统计]:<br/>    			browser.find_element_by_name(报表).click()<br/>    			if menu in [报表设置, 接口统计报表, 流量排行报表, 会话监控报表, 系统状态报表, 事件统计报表, 会话表]:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [Anti_DDoS会话数, Anti_DDoS会话速率, Anti_DDoS数据包速率, Top_N, 来源IP统计]:<br/>    				if not browser.find_element_by_xpath(display_DDoS防护).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(DDoS防护).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		else:<br/>    			print(&quot;导航菜单未知，请检查是否输入错误，或切换函数。&quot;)<br/>    <br/>    		browser.switch_to.default_content()<br/>    		# 定位到内容frame<br/>    		time.sleep(1)<br/>    		try:<br/>    			time.sleep(1)<br/>    			browser.switch_to.frame(&quot;content&quot;)<br/>    		except Exception as err:<br/>    			print(err)<br/>    			print(&quot;导航处进入，没有找到frame&quot;)<br/>    <br/>    	elif oem_name == &quot;SCG&quot; or oem_name == &quot;万兆测试&quot;:<br/>    		# print(&quot;进入SCG导航&quot;)<br/>    		# 有时间界面会出现告警，需要将告警信息print出来<br/>    		try:<br/>    			# print(&quot;Alert exists&quot;)<br/>    			alert = browser.switch_to_alert()<br/>    			print(alert.text)<br/>    			alert.accept()<br/>    		except Exception as err1:<br/>    			# print(&quot;无警告，点击返回&quot;)<br/>    			# print(err1)<br/>    			# print(&#x27;文件&#x27;, err1.__traceback__.tb_frame.f_globals[&#x27;__file__&#x27;])<br/>    			# print(&#x27;行号&#x27;, err1.__traceback__.tb_lineno)<br/>    			pass<br/>    			try:<br/>    				browser.find_element_by_xpath(&#x27;// *[ @ id = &quot;link_but&quot;]&#x27;).click()<br/>    			except:<br/>    				# print(&quot;无点击返回&quot;)<br/>    				pass<br/>    		# browser.refresh()<br/>    		browser.switch_to.default_content()<br/>    		# 定位到左侧frame<br/>    		time.sleep(1)<br/>    		browser.switch_to.frame(&quot;lefttree&quot;)<br/>    		if menu in [系统状态, 管理员, 系统升级, Web证书, 重启系统, 系统信息, 时间设定, DNS,<br/>    		            配置文件, 高可用性, SNMP设置, SNMP_Trap, 网络诊断, 服务器诊断]:<br/>    			browser.find_element_by_name(系统).click()<br/>    			if menu == 系统状态:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [管理员, 系统升级, Web证书, 重启系统]:<br/>    				if not browser.find_element_by_xpath(display_系统管理).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(系统管理).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [系统信息,  时间设定, DNS, 配置文件, 高可用性, SNMP设置, SNMP_Trap]:<br/>    				if not browser.find_element_by_xpath(display_配置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(配置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [网络诊断, 服务器诊断]:<br/>    				if not browser.find_element_by_xpath(display_诊断工具).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(诊断工具).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [物理接口, 子接口, 网桥, DHCP设定, DHCP租用列表, ARP列表, 绑定列表, 桥MAC表, IPv6邻居列表,<br/>    		              IPv6隧道]:<br/>    			browser.find_element_by_name(网络).click()<br/>    			if menu in [物理接口, 子接口, 网桥]:<br/>    				if not browser.find_element_by_xpath(display_接口设置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(接口设置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [DHCP设定, DHCP租用列表]:<br/>    				if not browser.find_element_by_xpath(display_DHCP).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(DHCP).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [ARP列表, 绑定列表, 桥MAC表, IPv6邻居列表, IPv6隧道]:<br/>    				if not browser.find_element_by_xpath(display_MAC).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(MAC).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [静态路由, 策略路由, OSPF, ISP自动选择, 多网关组, 路由监控]:<br/>    			browser.find_element_by_name(路由).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [计划任务, Zone, IPv4地址, IPv4地址范围, IPv4地址组, IPv6地址, IPv6地址范围, IPv6地址组,<br/>    		              预定义, 自定义, 服务组]:<br/>    			browser.find_element_by_name(对象).click()<br/>    			if menu == 计划任务 or menu == Zone:<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [IPv4地址, IPv4地址范围, IPv4地址组]:<br/>    				if not browser.find_element_by_xpath(display_IPv4).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(IPv4).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [IPv6地址, IPv6地址范围, IPv6地址组]:<br/>    				if not browser.find_element_by_xpath(display_IPv6).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(IPv6).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [预定义, 自定义, 服务组]:<br/>    				if not browser.find_element_by_xpath(display_服务).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(服务).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [IPv4访问列表, IPv6访问列表, 目的NAT, 源NAT, 服务器负载均衡]:<br/>    			browser.find_element_by_name(防火墙).click()<br/>    			if menu == IPv4访问列表 or menu == IPv6访问列表:<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [目的NAT, 源NAT, 服务器负载均衡]:<br/>    				if not browser.find_element_by_xpath(display_NAT).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(NAT).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [主机标识, 应用加密, 手动密钥, 远程网关, 远程访问, 虚拟专网监控, CA证书, VPN证书, 随机数生成]:<br/>    			browser.find_element_by_name(虚拟专网).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [安全站点, 证书配置, Portal站点, sslvpn本地用户]:<br/>    			browser.find_element_by_name(SSLVPN).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [用户配置, 本地用户, 认证组, 认证服务器, 认证用户设置, 认证监控]:<br/>    			browser.find_element_by_name(认证用户).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [Anti_DDoS设置, Anti_DDoS用户配置, Anti_DDoS规则列表, Anti_DDoS黑_白名单]:<br/>    			browser.find_element_by_name(Anti_DDoS).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    <br/>    		elif menu in [日志统计, 日志服务器, 日志过滤, 日志格式, 日志告警, 管理日志, 系统日志, 安全日志, 流量日志]:<br/>    			browser.find_element_by_name(日志).click()<br/>    			if menu == 日志统计:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [日志服务器, 日志过滤, 日志格式, 日志告警]:<br/>    				if not browser.find_element_by_xpath(display_日志设置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(日志设置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [管理日志, 系统日志, 安全日志, 流量日志]:<br/>    				if not browser.find_element_by_xpath(display_日志记录).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(日志记录).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    				time.sleep(2)<br/>    <br/>    		elif menu in [机器学习, 安全事件, 默认漏洞]:<br/>    			browser.find_element_by_name(工业控制).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [报表设置, 接口统计报表, 流量排行报表, 会话监控报表, 系统状态报表, 事件统计报表, 会话表, Anti_DDoS会话数,<br/>    		              Anti_DDoS会话速率, Anti_DDoS数据包速率, Top_N, 来源IP统计]:<br/>    			browser.find_element_by_name(报表).click()<br/>    			if menu in [报表设置, 接口统计报表, 流量排行报表, 会话监控报表, 系统状态报表, 事件统计报表, 会话表]:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [Anti_DDoS会话数, Anti_DDoS会话速率, Anti_DDoS数据包速率, Top_N, 来源IP统计]:<br/>    				if not browser.find_element_by_xpath(display_DDoS防护).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(DDoS防护).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		else:<br/>    			print(&quot;导航菜单未知，请检查是否输入错误，或切换函数。&quot;)<br/>    		browser.switch_to.default_content()<br/>    		# 定位到内容frame<br/>&gt;   		browser.switch_to.frame(&quot;content&quot;)<br/><br/>page_obj\common\my_selenium.py:379: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.switch_to.SwitchTo object at 0x000000000D4A9390&gt;<br/>frame_reference = &#x27;content&#x27;<br/><br/>    def frame(self, frame_reference):<br/>        &quot;&quot;&quot;<br/>            Switches focus to the specified frame, by index, name, or webelement.<br/>    <br/>            :Args:<br/>             - frame_reference: The name of the window to switch to, an integer representing the index,<br/>                                or a webelement that is an (i)frame to switch to.<br/>    <br/>            :Usage:<br/>                driver.switch_to.frame(&#x27;frame_name&#x27;)<br/>                driver.switch_to.frame(1)<br/>                driver.switch_to.frame(driver.find_elements_by_tag_name(&quot;iframe&quot;)[0])<br/>            &quot;&quot;&quot;<br/>        if isinstance(frame_reference, basestring) and self._driver.w3c:<br/>            try:<br/>                frame_reference = self._driver.find_element(By.ID, frame_reference)<br/>            except NoSuchElementException:<br/>                try:<br/>                    frame_reference = self._driver.find_element(By.NAME, frame_reference)<br/>                except NoSuchElementException:<br/>                    raise NoSuchFrameException(frame_reference)<br/>    <br/>&gt;       self._driver.execute(Command.SWITCH_TO_FRAME, {&#x27;id&#x27;: frame_reference})<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\switch_to.py:89: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/>driver_command = &#x27;switchToFrame&#x27;<br/>params = {&#x27;id&#x27;: &#x27;content&#x27;, &#x27;sessionId&#x27;: &#x27;6a0ff368b3df885e4993ece783fee83d&#x27;}<br/><br/>    def execute(self, driver_command, params=None):<br/>        &quot;&quot;&quot;<br/>            Sends a command to be executed by a command.CommandExecutor.<br/>    <br/>            :Args:<br/>             - driver_command: The name of the command to execute as a string.<br/>             - params: A dictionary of named parameters to send with the command.<br/>    <br/>            :Returns:<br/>              The command&#x27;s JSON response loaded into a dictionary object.<br/>            &quot;&quot;&quot;<br/>        if self.session_id is not None:<br/>            if not params:<br/>                params = {&#x27;sessionId&#x27;: self.session_id}<br/>            elif &#x27;sessionId&#x27; not in params:<br/>                params[&#x27;sessionId&#x27;] = self.session_id<br/>    <br/>        params = self._wrap_value(params)<br/>        response = self.command_executor.execute(driver_command, params)<br/>        if response:<br/>&gt;           self.error_handler.check_response(response)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:320: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x000000000D4A91D0&gt;<br/>response = {&#x27;sessionId&#x27;: &#x27;6a0ff368b3df885e4993ece783fee83d&#x27;, &#x27;status&#x27;: 8, &#x27;value&#x27;: {&#x27;message&#x27;: &#x27;no such frame\n  (Session info: c...r info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)&#x27;}}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>            Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>            :Args:<br/>             - response - The JSON response from the WebDriver server as a dictionary<br/>               object.<br/>    <br/>            :Raises: If the response contains an error message.<br/>            &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchFrameException: Message: no such frame</span><br/><span class="error">E         (Session info: chrome=80.0.3987.122)</span><br/><span class="error">E         (Driver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)</span><br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\errorhandler.py:242: NoSuchFrameException<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139300(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;ip address 131.1.1.1 255.255.255.0&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		into_fun(browser, DHCP设定)<br/>    <br/>    		browser.switch_to.default_content()<br/>    		# 定位到内容frame<br/>    		browser.switch_to.frame(&quot;content&quot;)<br/>    		# 选interface下拉框<br/>    		s1 = Select(browser.find_element_by_xpath(&#x27;//*[@id=&quot;interface&quot;]&#x27;))<br/>    		# 选interface下拉框内容<br/>    		s1.select_by_visible_text(interface_name_3)<br/>    		# 点击增加<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;totalrules&quot;]/input&#x27;).click()<br/>    		# 点击返回<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;link_but&quot;]&#x27;).click()<br/>    		# 点击dhcp_server<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;work_mode_1&quot;]&#x27;).click()<br/>    		# 输入dhcp_rely服务器1<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;relay_server1&quot;]&#x27;).send_keys(&quot;131.1.1.254&quot;)<br/>    		# 点击保存<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;container&quot;]/div/form/div[2]/div[2]/div/input[2]&#x27;).click()<br/>    		time.sleep(2)<br/>    		webinfo = browser.find_element_by_xpath(&#x27;//*[@id=&quot;box&quot;]/div[3]/ul/li[2]&#x27;).text<br/>    		time.sleep(2)<br/>    		# 点击返回<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;link_but&quot;]&#x27;).click()<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;no ip address 131.1.1.1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		try:<br/>    			assert webinfo == &quot;接口上有多个IP或者没有IP，不能被设置为DHCP Relay&quot;<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert webinfo == &quot;接口上有多个IP或者没有IP，不能被设置为DHCP Relay&quot;<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>    		reload(hostip=dev1)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139300.py:68: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-07 00:48:20.672819</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139302.py::test_c139302</td>
+          <td>None</td>
+          <td class="col-duration">77.55</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139302(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;ip address 131.1.1.1 255.255.255.0&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		into_fun(browser, DHCP设定)<br/>    <br/>    		# 选interface下拉框<br/>    		s1 = Select(browser.find_element_by_xpath(&#x27;//*[@id=&quot;interface&quot;]&#x27;))<br/>    		# 选interface下拉框内容<br/>    		s1.select_by_visible_text(interface_name_3)<br/>    		# 点击增加<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;totalrules&quot;]/input&#x27;).click()<br/>    		# 点击返回<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;link_but&quot;]&#x27;).click()<br/>    		# 点击dhcp_server<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;work_mode_0&quot;]&#x27;).click()<br/>    		# 输入dhcp网关<br/>&gt;   		browser.find_element_by_xpath(&#x27;//*[@id=&quot;gateway&quot;]&#x27;).send_keys(&quot;13.1.1.254&quot;)<br/><br/>test_case\scg\scg_DCHP_Server\test_c139302.py:38: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/>xpath = &#x27;//*[@id=&quot;gateway&quot;]&#x27;<br/><br/>    def find_element_by_xpath(self, xpath):<br/>        &quot;&quot;&quot;<br/>            Finds an element by xpath.<br/>    <br/>            :Args:<br/>             - xpath - The xpath locator of the element to find.<br/>    <br/>            :Returns:<br/>             - WebElement - the element if it was found<br/>    <br/>            :Raises:<br/>             - NoSuchElementException - if the element wasn&#x27;t found<br/>    <br/>            :Usage:<br/>                element = driver.find_element_by_xpath(&#x27;//div/td[1]&#x27;)<br/>            &quot;&quot;&quot;<br/>&gt;       return self.find_element(by=By.XPATH, value=xpath)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:393: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/>by = &#x27;xpath&#x27;, value = &#x27;//*[@id=&quot;gateway&quot;]&#x27;<br/><br/>    def find_element(self, by=By.ID, value=None):<br/>        &quot;&quot;&quot;<br/>            Find an element given a By strategy and locator. Prefer the find_element_by_* methods when<br/>            possible.<br/>    <br/>            :Usage:<br/>                element = driver.find_element(By.ID, &#x27;foo&#x27;)<br/>    <br/>            :rtype: WebElement<br/>            &quot;&quot;&quot;<br/>        if self.w3c:<br/>            if by == By.ID:<br/>                by = By.CSS_SELECTOR<br/>                value = &#x27;[id=&quot;%s&quot;]&#x27; % value<br/>            elif by == By.TAG_NAME:<br/>                by = By.CSS_SELECTOR<br/>            elif by == By.CLASS_NAME:<br/>                by = By.CSS_SELECTOR<br/>                value = &quot;.%s&quot; % value<br/>            elif by == By.NAME:<br/>                by = By.CSS_SELECTOR<br/>                value = &#x27;[name=&quot;%s&quot;]&#x27; % value<br/>        return self.execute(Command.FIND_ELEMENT, {<br/>            &#x27;using&#x27;: by,<br/>&gt;           &#x27;value&#x27;: value})[&#x27;value&#x27;]<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:966: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/>driver_command = &#x27;findElement&#x27;<br/>params = {&#x27;sessionId&#x27;: &#x27;6a0ff368b3df885e4993ece783fee83d&#x27;, &#x27;using&#x27;: &#x27;xpath&#x27;, &#x27;value&#x27;: &#x27;//*[@id=&quot;gateway&quot;]&#x27;}<br/><br/>    def execute(self, driver_command, params=None):<br/>        &quot;&quot;&quot;<br/>            Sends a command to be executed by a command.CommandExecutor.<br/>    <br/>            :Args:<br/>             - driver_command: The name of the command to execute as a string.<br/>             - params: A dictionary of named parameters to send with the command.<br/>    <br/>            :Returns:<br/>              The command&#x27;s JSON response loaded into a dictionary object.<br/>            &quot;&quot;&quot;<br/>        if self.session_id is not None:<br/>            if not params:<br/>                params = {&#x27;sessionId&#x27;: self.session_id}<br/>            elif &#x27;sessionId&#x27; not in params:<br/>                params[&#x27;sessionId&#x27;] = self.session_id<br/>    <br/>        params = self._wrap_value(params)<br/>        response = self.command_executor.execute(driver_command, params)<br/>        if response:<br/>&gt;           self.error_handler.check_response(response)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:320: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x000000000D4A91D0&gt;<br/>response = {&#x27;sessionId&#x27;: &#x27;6a0ff368b3df885e4993ece783fee83d&#x27;, &#x27;status&#x27;: 7, &#x27;value&#x27;: {&#x27;message&#x27;: &#x27;no such element: Unable to locate...r info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)&#x27;}}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>            Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>            :Args:<br/>             - response - The JSON response from the WebDriver server as a dictionary<br/>               object.<br/>    <br/>            :Raises: If the response contains an error message.<br/>            &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchElementException: Message: no such element: Unable to locate element: {&quot;method&quot;:&quot;xpath&quot;,&quot;selector&quot;:&quot;//*[@id=&quot;gateway&quot;]&quot;}</span><br/><span class="error">E         (Session info: chrome=80.0.3987.122)</span><br/><span class="error">E         (Driver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)</span><br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\errorhandler.py:242: NoSuchElementException<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6a0ff368b3df885e4993ece783fee83d&quot;)&gt;<br/><br/>    def test_c139302(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;ip address 131.1.1.1 255.255.255.0&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		into_fun(browser, DHCP设定)<br/>    <br/>    		# 选interface下拉框<br/>    		s1 = Select(browser.find_element_by_xpath(&#x27;//*[@id=&quot;interface&quot;]&#x27;))<br/>    		# 选interface下拉框内容<br/>    		s1.select_by_visible_text(interface_name_3)<br/>    		# 点击增加<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;totalrules&quot;]/input&#x27;).click()<br/>    		# 点击返回<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;link_but&quot;]&#x27;).click()<br/>    		# 点击dhcp_server<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;work_mode_0&quot;]&#x27;).click()<br/>    		# 输入dhcp网关<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;gateway&quot;]&#x27;).send_keys(&quot;13.1.1.254&quot;)<br/>    		# 输入dhcp子网掩码<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;netmask&quot;]&#x27;).send_keys(&quot;24&quot;)<br/>    		# 点击高级<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;is_dhcp_adv&quot;]&#x27;).click()<br/>    		# 输入静态ip地址<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;ip0&quot;]&#x27;).send_keys(&quot;13.1.1.4&quot;)<br/>    		# 输入静态mac地址<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;mac0&quot;]&#x27;).send_keys(&quot;e8:j7:48:57:19:c3&quot;)<br/>    		# 点击保存<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;container&quot;]/div/form/div[2]/div[2]/div/input[2]&#x27;).click()<br/>    		time.sleep(2)<br/>    		# 并打印出来<br/>    		alert = browser.switch_to_alert()<br/>    		print(alert.text)<br/>    		webinfo = alert.text<br/>    		time.sleep(2)<br/>    		browser.switch_to_alert().accept()<br/>    		# 点击取消<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;container&quot;]/div/form/div[2]/div[2]/div/input[3]&#x27;).click()<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_3)<br/>    		a.execute(&quot;no ip address 131.1.1.1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		dhcp_server_edit_or_delete(browser, fuction=&quot;delete&quot;)<br/>    		try:<br/>    			assert webinfo == &quot;物理地址(MAC)格式输入错误，请重新输入。&quot;<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert webinfo == &quot;物理地址(MAC)格式输入错误，请重新输入。&quot;<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>    		reload(hostip=dev1)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_DCHP_Server\test_c139302.py:78: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:48:00.968784</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139168.py::test_c139168</td>
+          <td>None</td>
+          <td class="col-duration">68.42</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:48:56.975987</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139169.py::test_c139169</td>
+          <td>None</td>
+          <td class="col-duration">56.00</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:49:35.107168</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139170.py::test_c139170</td>
+          <td>None</td>
+          <td class="col-duration">38.13</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:50:15.430475</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139171.py::test_c139171</td>
+          <td>None</td>
+          <td class="col-duration">40.32</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:50:56.367816</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139172.py::test_c139172</td>
+          <td>None</td>
+          <td class="col-duration">40.93</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:51:42.146434</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139173.py::test_c139173</td>
+          <td>None</td>
+          <td class="col-duration">45.77</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:52:27.026001</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139174.py::test_c139174</td>
+          <td>None</td>
+          <td class="col-duration">44.87</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:53:11.920569</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139177.py::test_c139177</td>
+          <td>None</td>
+          <td class="col-duration">44.89</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:53:56.312108</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139178.py::test_c139178</td>
+          <td>None</td>
+          <td class="col-duration">44.39</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:54:41.982720</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139179.py::test_c139179</td>
+          <td>None</td>
+          <td class="col-duration">45.67</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:55:25.911233</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139180.py::test_main</td>
+          <td>None</td>
+          <td class="col-duration">43.92</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:56:10.898806</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139181.py::test_c139181</td>
+          <td>None</td>
+          <td class="col-duration">44.98</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:56:55.683368</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139182.py::test_main</td>
+          <td>None</td>
+          <td class="col-duration">44.78</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:57:40.323921</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139183.py::test_c139183</td>
+          <td>None</td>
+          <td class="col-duration">44.64</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:58:19.931186</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139184.py::test_c139184</td>
+          <td>None</td>
+          <td class="col-duration">39.60</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:59:07.407902</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139186.py::test_c139186</td>
+          <td>None</td>
+          <td class="col-duration">47.47</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 23:59:58.636832</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139189.py::test_c139189</td>
+          <td>None</td>
+          <td class="col-duration">51.22</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:00:49.514742</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139191.py::test_c139191</td>
+          <td>None</td>
+          <td class="col-duration">50.87</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:01:37.302475</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139192.py::test_c139192</td>
+          <td>None</td>
+          <td class="col-duration">47.78</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:02:22.057035</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139193.py::test_c139193</td>
+          <td>None</td>
+          <td class="col-duration">44.75</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:02:58.925144</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139195.py::test_main</td>
+          <td>None</td>
+          <td class="col-duration">36.86</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:03:34.484178</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139196.py::test_c139196</td>
+          <td>None</td>
+          <td class="col-duration">35.56</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:04:34.558614</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139197.py::test_c139197</td>
+          <td>None</td>
+          <td class="col-duration">60.07</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:05:24.346462</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139211.py::test_c139211</td>
+          <td>None</td>
+          <td class="col-duration">49.78</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:06:00.607536</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139212.py::test_c139212</td>
+          <td>None</td>
+          <td class="col-duration">36.26</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:09:47.191495</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139213.py::test_c139213</td>
+          <td>None</td>
+          <td class="col-duration">226.58</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:11:28.937315</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139218.py::test_c139218</td>
+          <td>None</td>
+          <td class="col-duration">101.74</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:13:01.736623</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139219.py::test_c139219</td>
+          <td>None</td>
+          <td class="col-duration">92.79</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:13:41.002869</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139220.py::test_c139220</td>
+          <td>None</td>
+          <td class="col-duration">39.26</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:27:14.987426</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139250.py::test_c139250</td>
+          <td>None</td>
+          <td class="col-duration">26.08</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:29:23.405771</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139251.py::test_c139251</td>
+          <td>None</td>
+          <td class="col-duration">128.42</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:30:05.880200</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139263.py::test_c139263</td>
+          <td>None</td>
+          <td class="col-duration">42.47</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:32:25.820205</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139264.py::test_c139264</td>
+          <td>None</td>
+          <td class="col-duration">139.94</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:33:01.575250</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139265.py::test_c139265</td>
+          <td>None</td>
+          <td class="col-duration">35.75</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:36:02.276585</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139266.py::test_C139266</td>
+          <td>None</td>
+          <td class="col-duration">60.89</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:36:57.308733</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139267.py::test_c139267</td>
+          <td>None</td>
+          <td class="col-duration">55.03</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:37:44.526434</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139268.py::test_c139268</td>
+          <td>None</td>
+          <td class="col-duration">47.21</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:38:44.113842</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139270.py::test_c139270</td>
+          <td>None</td>
+          <td class="col-duration">59.58</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:39:32.466607</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139272.py::test_c139272</td>
+          <td>None</td>
+          <td class="col-duration">48.35</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:40:16.244111</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139273.py::test_c139273</td>
+          <td>None</td>
+          <td class="col-duration">43.77</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:40:52.398179</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139286.py::test_c139286</td>
+          <td>None</td>
+          <td class="col-duration">36.15</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:41:15.814519</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139287.py::test_c139287</td>
+          <td>None</td>
+          <td class="col-duration">23.41</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:41:38.861837</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139289.py::test_c139289</td>
+          <td>None</td>
+          <td class="col-duration">23.04</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:42:01.944157</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139290.py::test_c139290</td>
+          <td>None</td>
+          <td class="col-duration">23.08</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:42:25.434501</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139291.py::test_c139291</td>
+          <td>None</td>
+          <td class="col-duration">23.49</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:42:49.036851</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139292.py::test_c139292</td>
+          <td>None</td>
+          <td class="col-duration">23.60</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:43:13.106227</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139293.py::test_c139293</td>
+          <td>None</td>
+          <td class="col-duration">24.07</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:43:36.544568</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139294.py::test_c139294</td>
+          <td>None</td>
+          <td class="col-duration">23.43</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:44:00.726951</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139295.py::test_c139295</td>
+          <td>None</td>
+          <td class="col-duration">24.18</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:44:23.560257</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139296.py::test_c139296</td>
+          <td>None</td>
+          <td class="col-duration">22.83</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:45:04.854619</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139297.py::test_c139297</td>
+          <td>None</td>
+          <td class="col-duration">41.29</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:45:27.936939</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139298.py::test_c139298</td>
+          <td>None</td>
+          <td class="col-duration">23.08</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:47:02.943373</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139300.py::test_c139300</td>
+          <td>None</td>
+          <td class="col-duration">18.48</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:48:47.700365</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139302.py::test_c139302</td>
+          <td>None</td>
+          <td class="col-duration">27.03</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:49:12.087760</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139303.py::test_c139303</td>
+          <td>None</td>
+          <td class="col-duration">24.38</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:49:35.394093</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139304.py::test_c139304</td>
+          <td>None</td>
+          <td class="col-duration">23.30</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:49:58.704426</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139305.py::test_c139305</td>
+          <td>None</td>
+          <td class="col-duration">23.31</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:50:28.051105</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139307.py::test_c139307</td>
+          <td>None</td>
+          <td class="col-duration">29.34</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:50:51.865467</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139308.py::test_c139308</td>
+          <td>None</td>
+          <td class="col-duration">23.81</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:51:16.811894</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139309.py::test_c139309</td>
+          <td>None</td>
+          <td class="col-duration">24.94</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:51:40.267235</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139310.py::test_c139310</td>
+          <td>None</td>
+          <td class="col-duration">23.45</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:52:04.683632</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139311.py::test_c139311</td>
+          <td>None</td>
+          <td class="col-duration">24.41</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:52:28.420989</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139312.py::test_c139312</td>
+          <td>None</td>
+          <td class="col-duration">23.73</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:52:52.073342</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139313.py::test_c139313</td>
+          <td>None</td>
+          <td class="col-duration">23.65</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:53:16.703751</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139314.py::test_c139314</td>
+          <td>None</td>
+          <td class="col-duration">24.63</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-07 00:53:53.289844</td>
+          <td class="col-name">test_case/scg/scg_DCHP_Server/test_c139315.py::test_c139315</td>
+          <td>None</td>
+          <td class="col-duration">34.04</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>

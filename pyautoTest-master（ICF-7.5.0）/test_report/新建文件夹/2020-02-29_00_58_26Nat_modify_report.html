@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <style>body {
+	font-family: Helvetica, Arial, sans-serif;
+	font-size: 12px;
+	min-width: 1200px;
+	color: #999;
+}
+
+h1 {
+	font-size: 24px;
+	color: black;
+}
+
+h2 {
+	font-size: 16px;
+	color: black;
+}
+
+p {
+    color: black;
+}
+
+a {
+	color: #999;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+
+#environment td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+}
+
+#environment tr:nth-child(odd) {
+	background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed, .passed .col-result {
+	color: green;
+}
+span.skipped, span.xfailed, span.rerun, .skipped .col-result, .xfailed .col-result, .rerun .col-result {
+	color: orange;
+}
+span.error, span.failed, span.xpassed, .error .col-result, .failed .col-result, .xpassed .col-result  {
+	color: red;
+}
+
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+
+#results-table {
+	border: 1px solid #e6e6e6;
+	color: #999;
+	font-size: 12px;
+	width: 100%
+}
+
+#results-table th, #results-table td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+	text-align: left
+}
+#results-table th {
+	font-weight: bold
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+
+.log:only-child {
+	height: inherit
+}
+.log {
+	background-color: #e6e6e6;
+	border: 1px solid #e6e6e6;
+	color: black;
+	display: block;
+	font-family: "Courier New", Courier, monospace;
+	height: 230px;
+	overflow-y: scroll;
+	padding: 5px;
+	white-space: pre-wrap
+}
+div.image {
+	border: 1px solid #e6e6e6;
+	float: right;
+	height: 240px;
+	margin-left: 5px;
+	overflow: hidden;
+	width: 320px
+}
+div.image img {
+	width: 320px
+}
+.collapsed {
+	display: none;
+}
+.expander::after {
+	content: " (show details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+.collapser::after {
+	content: " (hide details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+	cursor: pointer;
+}
+
+.sort-icon {
+	font-size: 0px;
+	float: left;
+	margin-right: 5px;
+	margin-top: 5px;
+	/*triangle*/
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+}
+
+.inactive .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #E6E6E6;
+}
+
+.asc.active .sort-icon {
+	/*finish triangle*/
+	border-bottom: 8px solid #999;
+}
+
+.desc.active .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>2020-02-29_00_58_26Nat_modify_report.html</h1>
+    <p>Report generated on 29-Feb-2020 at 01:39:50 by<a href="https://pypi.python.org/pypi/pytest-html"> pytest-html</a> v1.19.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;3.6.3&apos;, &apos;py&apos;: &apos;1.8.0&apos;, &apos;pluggy&apos;: &apos;0.6.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-7-6.1.7601-SP1</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;rerunfailures&apos;: &apos;4.1&apos;, &apos;metadata&apos;: &apos;1.8.0&apos;, &apos;html&apos;: &apos;1.19.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.0</td></tr></table>
+    <h2>Summary</h2>
+    <p>27 tests ran in 2483.59 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">27 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">2 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable time" col="time">Time</th>
+          <th class="sortable" col="name">Test</th>
+          <th>Description</th>
+          <th class="sortable numeric" col="duration">Duration</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="5">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-02-28 17:15:54.884587</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142602.py::test_c142602</td>
+          <td>None</td>
+          <td class="col-duration">212.99</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6391b7e99ef2b6dd74c2e064bb26ac07&quot;)&gt;<br/><br/>    def test_c142602(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		# 在10.2.2.81上配置地址<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;maplist map_jia_1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;ip address 192.165.12.1 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		# 在10.2.2.82上配置去往83的路由，以及配置10.2.2.82的地址<br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;ip address 192.165.12.2 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		# 编辑maplist<br/>    		edit_maplist(browser, name=&quot;map_jia_1&quot;, oriipfrom=&quot;12.1.1.0&quot;, oriipto=&quot;12.1.1.255&quot;, one_to_one_mapping=&quot;yes&quot;,<br/>    					 transipfrom=&quot;13.1.1.3&quot;)<br/>    <br/>    		# 编辑maplist<br/>    		edit_maplist(browser, name=&quot;map_jia_1&quot;, oriipfrom=&quot;192.165.12.0&quot;, oriipto=&quot;192.165.12.255&quot;, one_to_one_mapping=&quot;yes&quot;,<br/>    					 transipfrom=&quot;13.1.1.3&quot;)<br/>    <br/>    		add_snat(browser, name=&quot;snat_jia_1&quot;, desc=&quot;&quot;, src_inter_zone=interface_name_2, des_inter_zone=interface_name_3,<br/>    				 other_match_switch=&quot;no&quot;,<br/>    				 src_ipadd_switch=&quot;自定义&quot;, srcaddress_predefine=&quot;A:any&quot;, srcip_custom=&quot;12.1.1.0&quot;, srcmask_custom=&quot;24&quot;,<br/>    				 des_ipadd_switch=&quot;自定义&quot;, desaddress_predefine=&quot;A:any&quot;, desip_custom=&quot;13.1.1.0&quot;, desmask_custom=&quot;24&quot;,<br/>    				 server=&#x27;P:any&#x27;, trans_local_ip=&quot;yes&quot;, single_ip=&#x27;no&#x27;, ip_range_start=&#x27;no&#x27;, ip_range_end=&#x27;no&#x27;,<br/>&gt;   				 other_action_nomap=&#x27;no&#x27;, other_action_maplist=&quot;map_jia_1&quot;, save=&#x27;yes&#x27;, cancel=&#x27;no&#x27;)<br/><br/>test_case\scg\scg_Nat_modify\test_c142602.py:58: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6391b7e99ef2b6dd74c2e064bb26ac07&quot;)&gt;<br/>name = &#x27;snat_jia_1&#x27;, desc = &#x27;&#x27;, src_inter_zone = &#x27;ge0/2&#x27;<br/>des_inter_zone = &#x27;ge0/3&#x27;, other_match_switch = &#x27;no&#x27;, src_ipadd_switch = &#x27;自定义&#x27;<br/>srcaddress_predefine = &#x27;A:any&#x27;, srcip_custom = &#x27;12.1.1.0&#x27;, srcmask_custom = &#x27;24&#x27;<br/>des_ipadd_switch = &#x27;自定义&#x27;, desaddress_predefine = &#x27;A:any&#x27;<br/>desip_custom = &#x27;13.1.1.0&#x27;, desmask_custom = &#x27;24&#x27;, server = &#x27;P:any&#x27;<br/>trans_local_ip = &#x27;yes&#x27;, single_ip = &#x27;no&#x27;, ip_range_start = &#x27;no&#x27;<br/>ip_range_end = &#x27;no&#x27;, other_action_nomap = &#x27;no&#x27;<br/>other_action_maplist = &#x27;map_jia_1&#x27;, save = &#x27;yes&#x27;, cancel = &#x27;no&#x27;<br/><br/>    def add_snat(browser, name, desc=&quot;&quot;, src_inter_zone=&quot;Z:any&quot;, des_inter_zone=&quot;Z:any&quot;, other_match_switch=&quot;no&quot;,<br/>    			 src_ipadd_switch=&quot;预定义&quot;, srcaddress_predefine=&quot;A:any&quot;, srcip_custom=&quot;&quot;, srcmask_custom=&quot;&quot;,<br/>    			 des_ipadd_switch=&quot;预定义&quot;, desaddress_predefine=&quot;A:any&quot;, desip_custom=&quot;&quot;, desmask_custom=&quot;&quot;,<br/>    			 server=&#x27;P:any&#x27;, trans_local_ip=&quot;yes&quot;, single_ip=&#x27;no&#x27;, ip_range_start=&#x27;no&#x27;, ip_range_end=&#x27;no&#x27;,<br/>    			 other_action_nomap=&#x27;no&#x27;,  other_action_maplist=&#x27;no&#x27;, save=&#x27;yes&#x27;, cancel=&#x27;no&#x27;):<br/>    	# 切换到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# # 切换到左侧frame<br/>    	# browser.switch_to.frame(&quot;lefttree&quot;)<br/>    	# browser.find_element_by_xpath(防火墙).click()<br/>    	# browser.find_element_by_xpath(NAT).click()<br/>    	#<br/>    	# # 判断菜单是否展开，元素是否可见<br/>    	# if not browser.find_element_by_xpath(display_NAT).is_displayed():<br/>    	# 	# 如果不可见，点击加号，展开元素<br/>    	# 	browser.find_element_by_xpath(NAT).click()<br/>    	# browser.find_element_by_xpath(源NAT).click()<br/>    	# # 定位到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# # 定位到内容frame<br/>    	# browser.switch_to.frame(&quot;content&quot;)<br/>    	into_fun(browser, 源NAT)<br/>    	# 点击    SNAT<br/>    	# browser.find_element_by_xpath(&#x27;//*[@id=&quot;current&quot;]/a&#x27;).click()<br/>    	# 点击增加<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;button_area&quot;]/div/input[1]&#x27;).click()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;name&quot;]&#x27;).send_keys(name)<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;description&quot;]&#x27;).send_keys(desc)<br/>    	time.sleep(1)<br/>    	s1 = Select(browser.find_element_by_xpath(&#x27;//*[@id=&quot;fromzone&quot;]&#x27;))<br/>&gt;   	s1.select_by_visible_text(src_inter_zone)<br/><br/>page_obj\scg\scg_def_nat.py:148: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.support.select.Select object at 0x000000001020B898&gt;<br/>text = &#x27;ge0/2&#x27;<br/><br/>    def select_by_visible_text(self, text):<br/>        &quot;&quot;&quot;Select all options that display text matching the argument. That is, when given &quot;Bar&quot; this<br/>               would select an option like:<br/>    <br/>                &lt;option value=&quot;foo&quot;&gt;Bar&lt;/option&gt;<br/>    <br/>               :Args:<br/>                - text - The visible text to match against<br/>    <br/>                throws NoSuchElementException If there is no option with specisied text in SELECT<br/>               &quot;&quot;&quot;<br/>        xpath = &quot;.//option[normalize-space(.) = %s]&quot; % self._escapeString(text)<br/>        opts = self._el.find_elements(By.XPATH, xpath)<br/>        matched = False<br/>        for opt in opts:<br/>            self._setSelected(opt)<br/>            if not self.is_multiple:<br/>                return<br/>            matched = True<br/>    <br/>        if len(opts) == 0 and &quot; &quot; in text:<br/>            subStringWithoutSpace = self._get_longest_token(text)<br/>            if subStringWithoutSpace == &quot;&quot;:<br/>                candidates = self.options<br/>            else:<br/>                xpath = &quot;.//option[contains(.,%s)]&quot; % self._escapeString(subStringWithoutSpace)<br/>                candidates = self._el.find_elements(By.XPATH, xpath)<br/>            for candidate in candidates:<br/>                if text == candidate.text:<br/>                    self._setSelected(candidate)<br/>                    if not self.is_multiple:<br/>                        return<br/>                    matched = True<br/>    <br/>        if not matched:<br/>&gt;           raise NoSuchElementException(&quot;Could not locate element with visible text: %s&quot; % text)<br/><span class="error">E           selenium.common.exceptions.NoSuchElementException: Message: Could not locate element with visible text: ge0/2</span><br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\select.py:140: NoSuchElementException<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6391b7e99ef2b6dd74c2e064bb26ac07&quot;)&gt;<br/><br/>    def test_c142602(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		# 在10.2.2.81上配置地址<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;maplist map_jia_1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;ip address 192.165.12.1 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		# 在10.2.2.82上配置去往83的路由，以及配置10.2.2.82的地址<br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;ip address 192.165.12.2 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		# 编辑maplist<br/>    		edit_maplist(browser, name=&quot;map_jia_1&quot;, oriipfrom=&quot;12.1.1.0&quot;, oriipto=&quot;12.1.1.255&quot;, one_to_one_mapping=&quot;yes&quot;,<br/>    					 transipfrom=&quot;13.1.1.3&quot;)<br/>    <br/>    		# 编辑maplist<br/>    		edit_maplist(browser, name=&quot;map_jia_1&quot;, oriipfrom=&quot;192.165.12.0&quot;, oriipto=&quot;192.165.12.255&quot;, one_to_one_mapping=&quot;yes&quot;,<br/>    					 transipfrom=&quot;13.1.1.3&quot;)<br/>    <br/>    		add_snat(browser, name=&quot;snat_jia_1&quot;, desc=&quot;&quot;, src_inter_zone=interface_name_2, des_inter_zone=interface_name_3,<br/>    				 other_match_switch=&quot;no&quot;,<br/>    				 src_ipadd_switch=&quot;自定义&quot;, srcaddress_predefine=&quot;A:any&quot;, srcip_custom=&quot;12.1.1.0&quot;, srcmask_custom=&quot;24&quot;,<br/>    				 des_ipadd_switch=&quot;自定义&quot;, desaddress_predefine=&quot;A:any&quot;, desip_custom=&quot;13.1.1.0&quot;, desmask_custom=&quot;24&quot;,<br/>    				 server=&#x27;P:any&#x27;, trans_local_ip=&quot;yes&quot;, single_ip=&#x27;no&#x27;, ip_range_start=&#x27;no&#x27;, ip_range_end=&#x27;no&#x27;,<br/>    				 other_action_nomap=&#x27;no&#x27;, other_action_maplist=&quot;map_jia_1&quot;, save=&#x27;yes&#x27;, cancel=&#x27;no&#x27;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.3&quot;)<br/>    		time.sleep(4)<br/>    		result1 = a.output()<br/>    		a.close()<br/>    		print(result1)<br/>    <br/>    		del_snat_byname(browser, name=&quot;snat_jia_1&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no maplist map_jia_1&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no maplist map_jia_1&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 192.165.12.1&quot;)<br/>    		a.close()<br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 192.165.12.2&quot;)<br/>    		a.close()<br/>    <br/>    		# 在10.2.2.82上删除去往83的路由，<br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=[dev1, dev2])<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_Nat_modify\test_c142602.py:109: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-02-28 17:33:34.000165</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142616.py::test_c142616</td>
+          <td>None</td>
+          <td class="col-duration">160.82</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6391b7e99ef2b6dd74c2e064bb26ac07&quot;)&gt;<br/><br/>    def test_c142616(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		# 在10.2.2.81上配置地址<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;maplist map_jia_1&quot;)<br/>    		a.close()<br/>    <br/>    		# 在10.2.2.82上配置去往83的路由，以及配置10.2.2.82的地址<br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		# 编辑maplist<br/>    		edit_maplist(browser, name=&quot;map_jia_1&quot;, oriipfrom=&quot;12.1.1.0&quot;, oriipto=&quot;12.1.1.255&quot;, sticky=&quot;yes&quot;,<br/>    					 transipfrom=&quot;13.1.1.3&quot;, transipto=&quot;13.1.1.255&quot;)<br/>    <br/>    		add_snat(browser, name=&quot;snat_jia_1&quot;, desc=&quot;&quot;, src_inter_zone=&quot;Z:any&quot;, other_match_switch=&quot;yes&quot;,<br/>    			 src_ipadd_switch=&quot;预定义&quot;, srcaddress_predefine=&quot;A:any&quot;,<br/>&gt;   				 other_action_nomap=&#x27;no&#x27;, other_action_maplist=&quot;map_jia_1&quot;, save=&#x27;yes&#x27;)<br/><br/>test_case\scg\scg_Nat_modify\test_c142616.py:46: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6391b7e99ef2b6dd74c2e064bb26ac07&quot;)&gt;<br/>name = &#x27;snat_jia_1&#x27;, desc = &#x27;&#x27;, src_inter_zone = &#x27;Z:any&#x27;<br/>des_inter_zone = &#x27;Z:any&#x27;, other_match_switch = &#x27;yes&#x27;, src_ipadd_switch = &#x27;预定义&#x27;<br/>srcaddress_predefine = &#x27;A:any&#x27;, srcip_custom = &#x27;&#x27;, srcmask_custom = &#x27;&#x27;<br/>des_ipadd_switch = &#x27;预定义&#x27;, desaddress_predefine = &#x27;A:any&#x27;, desip_custom = &#x27;&#x27;<br/>desmask_custom = &#x27;&#x27;, server = &#x27;P:any&#x27;, trans_local_ip = &#x27;yes&#x27;, single_ip = &#x27;no&#x27;<br/>ip_range_start = &#x27;no&#x27;, ip_range_end = &#x27;no&#x27;, other_action_nomap = &#x27;no&#x27;<br/>other_action_maplist = &#x27;map_jia_1&#x27;, save = &#x27;yes&#x27;, cancel = &#x27;no&#x27;<br/><br/>    def add_snat(browser, name, desc=&quot;&quot;, src_inter_zone=&quot;Z:any&quot;, des_inter_zone=&quot;Z:any&quot;, other_match_switch=&quot;no&quot;,<br/>    			 src_ipadd_switch=&quot;预定义&quot;, srcaddress_predefine=&quot;A:any&quot;, srcip_custom=&quot;&quot;, srcmask_custom=&quot;&quot;,<br/>    			 des_ipadd_switch=&quot;预定义&quot;, desaddress_predefine=&quot;A:any&quot;, desip_custom=&quot;&quot;, desmask_custom=&quot;&quot;,<br/>    			 server=&#x27;P:any&#x27;, trans_local_ip=&quot;yes&quot;, single_ip=&#x27;no&#x27;, ip_range_start=&#x27;no&#x27;, ip_range_end=&#x27;no&#x27;,<br/>    			 other_action_nomap=&#x27;no&#x27;,  other_action_maplist=&#x27;no&#x27;, save=&#x27;yes&#x27;, cancel=&#x27;no&#x27;):<br/>    	# 切换到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# # 切换到左侧frame<br/>    	# browser.switch_to.frame(&quot;lefttree&quot;)<br/>    	# browser.find_element_by_xpath(防火墙).click()<br/>    	# browser.find_element_by_xpath(NAT).click()<br/>    	#<br/>    	# # 判断菜单是否展开，元素是否可见<br/>    	# if not browser.find_element_by_xpath(display_NAT).is_displayed():<br/>    	# 	# 如果不可见，点击加号，展开元素<br/>    	# 	browser.find_element_by_xpath(NAT).click()<br/>    	# browser.find_element_by_xpath(源NAT).click()<br/>    	# # 定位到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# # 定位到内容frame<br/>    	# browser.switch_to.frame(&quot;content&quot;)<br/>    	into_fun(browser, 源NAT)<br/>    	# 点击    SNAT<br/>    	# browser.find_element_by_xpath(&#x27;//*[@id=&quot;current&quot;]/a&#x27;).click()<br/>    	# 点击增加<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;button_area&quot;]/div/input[1]&#x27;).click()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;name&quot;]&#x27;).send_keys(name)<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;description&quot;]&#x27;).send_keys(desc)<br/>    	time.sleep(1)<br/>    	s1 = Select(browser.find_element_by_xpath(&#x27;//*[@id=&quot;fromzone&quot;]&#x27;))<br/>    	s1.select_by_visible_text(src_inter_zone)<br/>    	s1 = Select(browser.find_element_by_xpath(&#x27;//*[@id=&quot;tozone&quot;]&#x27;))<br/>    	s1.select_by_visible_text(des_inter_zone)<br/>    	# 其他匹配项目<br/>    	if other_match_switch == &quot;yes&quot;:<br/>&gt;   		browser.find_element_by_xpath(&#x27;//*[@id=&quot;hidden_icon&quot;]&#x27;).click()<br/><br/>page_obj\scg\scg_def_nat.py:153: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.webelement.WebElement (session=&quot;6391b7e99ef2b6dd74c2e064bb26ac07&quot;, element=&quot;0.9451116573791716-7&quot;)&gt;<br/><br/>    def click(self):<br/>        &quot;&quot;&quot;Clicks the element.&quot;&quot;&quot;<br/>&gt;       self._execute(Command.CLICK_ELEMENT)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webelement.py:80: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.webelement.WebElement (session=&quot;6391b7e99ef2b6dd74c2e064bb26ac07&quot;, element=&quot;0.9451116573791716-7&quot;)&gt;<br/>command = &#x27;clickElement&#x27;<br/>params = {&#x27;id&#x27;: &#x27;0.9451116573791716-7&#x27;, &#x27;sessionId&#x27;: &#x27;6391b7e99ef2b6dd74c2e064bb26ac07&#x27;}<br/><br/>    def _execute(self, command, params=None):<br/>        &quot;&quot;&quot;Executes a command against the underlying HTML element.<br/>    <br/>            Args:<br/>              command: The name of the command to _execute as a string.<br/>              params: A dictionary of named parameters to send with the command.<br/>    <br/>            Returns:<br/>              The command&#x27;s JSON response loaded into a dictionary object.<br/>            &quot;&quot;&quot;<br/>        if not params:<br/>            params = {}<br/>        params[&#x27;id&#x27;] = self._id<br/>&gt;       return self._parent.execute(command, params)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webelement.py:628: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6391b7e99ef2b6dd74c2e064bb26ac07&quot;)&gt;<br/>driver_command = &#x27;clickElement&#x27;<br/>params = {&#x27;id&#x27;: &#x27;0.9451116573791716-7&#x27;, &#x27;sessionId&#x27;: &#x27;6391b7e99ef2b6dd74c2e064bb26ac07&#x27;}<br/><br/>    def execute(self, driver_command, params=None):<br/>        &quot;&quot;&quot;<br/>            Sends a command to be executed by a command.CommandExecutor.<br/>    <br/>            :Args:<br/>             - driver_command: The name of the command to execute as a string.<br/>             - params: A dictionary of named parameters to send with the command.<br/>    <br/>            :Returns:<br/>              The command&#x27;s JSON response loaded into a dictionary object.<br/>            &quot;&quot;&quot;<br/>        if self.session_id is not None:<br/>            if not params:<br/>                params = {&#x27;sessionId&#x27;: self.session_id}<br/>            elif &#x27;sessionId&#x27; not in params:<br/>                params[&#x27;sessionId&#x27;] = self.session_id<br/>    <br/>        params = self._wrap_value(params)<br/>        response = self.command_executor.execute(driver_command, params)<br/>        if response:<br/>&gt;           self.error_handler.check_response(response)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:320: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x00000000101E69E8&gt;<br/>response = {&#x27;sessionId&#x27;: &#x27;6391b7e99ef2b6dd74c2e064bb26ac07&#x27;, &#x27;status&#x27;: 13, &#x27;value&#x27;: {&#x27;message&#x27;: &#x27;unknown error: Element &lt;img src=...r info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)&#x27;}}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>            Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>            :Args:<br/>             - response - The JSON response from the WebDriver server as a dictionary<br/>               object.<br/>    <br/>            :Raises: If the response contains an error message.<br/>            &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.WebDriverException: Message: unknown error: Element &lt;img src=&quot;images/default/icon_show.gif&quot; id=&quot;hidden_icon&quot; alt=&quot;隐藏/显示&quot; title=&quot;隐藏/显示&quot;&gt; is not clickable at point (862, 201). Other element would receive the click: &lt;div id=&quot;loading&quot; class=&quot;loading&quot; style=&quot;&quot;&gt;&lt;/div&gt;</span><br/><span class="error">E         (Session info: chrome=80.0.3987.122)</span><br/><span class="error">E         (Driver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)</span><br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\errorhandler.py:242: WebDriverException<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6391b7e99ef2b6dd74c2e064bb26ac07&quot;)&gt;<br/><br/>    def test_c142616(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		# 在10.2.2.81上配置地址<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;maplist map_jia_1&quot;)<br/>    		a.close()<br/>    <br/>    		# 在10.2.2.82上配置去往83的路由，以及配置10.2.2.82的地址<br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		# 编辑maplist<br/>    		edit_maplist(browser, name=&quot;map_jia_1&quot;, oriipfrom=&quot;12.1.1.0&quot;, oriipto=&quot;12.1.1.255&quot;, sticky=&quot;yes&quot;,<br/>    					 transipfrom=&quot;13.1.1.3&quot;, transipto=&quot;13.1.1.255&quot;)<br/>    <br/>    		add_snat(browser, name=&quot;snat_jia_1&quot;, desc=&quot;&quot;, src_inter_zone=&quot;Z:any&quot;, other_match_switch=&quot;yes&quot;,<br/>    			 src_ipadd_switch=&quot;预定义&quot;, srcaddress_predefine=&quot;A:any&quot;,<br/>    				 other_action_nomap=&#x27;no&#x27;, other_action_maplist=&quot;map_jia_1&quot;, save=&#x27;yes&#x27;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.3&quot;)<br/>    		time.sleep(4)<br/>    		result1 = a.output()<br/>    		a.close()<br/>    		print(result1)<br/>    <br/>    		edit_snat_byname(browser, name=&quot;snat_jia_1&quot;, desc=&quot;&quot;, src_inter_zone=&quot;Z:any&quot;, other_match_switch=&quot;yes&quot;,<br/>    			 src_ipadd_switch=&quot;自定义&quot;, srcip_custom=&quot;12.1.1.0&quot;, srcmask_custom=&quot;24&quot;,<br/>    				 other_action_nomap=&#x27;no&#x27;, other_action_maplist=&quot;map_jia_1&quot;, save=&#x27;yes&#x27;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.3&quot;)<br/>    		time.sleep(4)<br/>    		result2 = a.output()<br/>    		a.close()<br/>    		print(result2)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;object network address add_jia_1&quot;)<br/>    		a.execute(&quot;network-object ip-address 12.1.1.0/24&quot;)<br/>    		a.execute(&quot;network-object ip-address 13.1.1.0/24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.execute(&quot;object network address-group add_gro_jia_1&quot;)<br/>    		a.execute(&quot;group-object address add_jia_1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		# a.execute(&quot;work-mode route&quot;)<br/>    		# a.execute(&quot;exit&quot;)<br/>    		# a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		# a.execute(&quot;ip address 12.1.1.1 24&quot;)<br/>    		# a.execute(&quot;exit&quot;)<br/>    		# a.execute(&quot;interface vlan &quot;+interface_name_2+&quot;.22&quot;)<br/>    		# a.execute(&quot;ip address 13.1.1.1 24&quot;)<br/>    		# a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		edit_snat_byname(browser, name=&quot;snat_jia_1&quot;, desc=&quot;&quot;, src_inter_zone=&quot;Z:any&quot;, other_match_switch=&quot;yes&quot;,<br/>    			 src_ipadd_switch=&quot;预定义&quot;, srcaddress_predefine=&quot;A:add_jia_1&quot;,<br/>    				 other_action_nomap=&#x27;no&#x27;, other_action_maplist=&quot;map_jia_1&quot;, save=&#x27;yes&#x27;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.3&quot;)<br/>    		time.sleep(4)<br/>    		result3 = a.output()<br/>    		a.close()<br/>    		print(result3)<br/>    <br/>    		edit_snat_byname(browser, name=&quot;snat_jia_1&quot;, desc=&quot;&quot;, src_inter_zone=&quot;Z:any&quot;, other_match_switch=&quot;yes&quot;,<br/>    			 src_ipadd_switch=&quot;预定义&quot;, srcaddress_predefine=&quot;G:add_gro_jia_1&quot;,<br/>    				 other_action_nomap=&#x27;no&#x27;, other_action_maplist=&quot;map_jia_1&quot;, save=&#x27;yes&#x27;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.3&quot;)<br/>    		time.sleep(4)<br/>    		result4 = a.output()<br/>    		a.close()<br/>    		print(result4)<br/>    <br/>    		edit_snat_byname(browser, name=&quot;snat_jia_1&quot;, edit_src_inter_zone=&quot;yes&quot;, src_inter_zone=&quot;Z:any&quot;,<br/>    					 edit_des_inter_zone=&quot;yes&quot;, des_inter_zone=&quot;Z:any&quot;, save=&quot;yes&quot;)<br/>    <br/>    		edit_snat_byname(browser, name=&quot;snat_jia_1&quot;, ip_range=&quot;yes&quot;,<br/>    						 ip_range_start=&quot;13.1.1.1&quot;, ip_range_end=&quot;13.1.1.255&quot;, save=&#x27;yes&#x27;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 13.1.1.3&quot;)<br/>    		time.sleep(4)<br/>    		result5 = a.output()<br/>    		a.close()<br/>    		print(result5)<br/>    <br/>    		add_snat(browser, name=&quot;snat_jia_2&quot;, save=&#x27;yes&#x27;)<br/>    <br/>    		# 点击返回<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;link_but&quot;]&#x27;).click()<br/>    		# 点击移动按钮<br/>    		browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[3]/td[12]/a[1]/img&#x27;).click()<br/>    <br/>    		loginfo1 = get_log(browser, 管理日志)<br/>    <br/>    		del_snat_byname(browser, name=&quot;snat_jia_1&quot;)<br/>    		del_snat_byname(browser, name=&quot;snat_jia_2&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no object network address add_jia_1&quot;)<br/>    		a.execute(&quot;no object network address add_gro_jia_1&quot;)<br/>    		a.close()<br/>    <br/>    		# 在10.2.2.82上删除去往83的路由，<br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    <br/>    <br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;ms&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			assert &quot;ms&quot; in result4<br/>    			assert &quot;ms&quot; in result5<br/>    			assert &quot;成功&quot; in loginfo1<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;ms&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			assert &quot;ms&quot; in result4<br/>    			assert &quot;ms&quot; in result5<br/>    			assert &quot;成功&quot; in loginfo1<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=[dev1, dev2])<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_Nat_modify\test_c142616.py:184: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:00:32.011802</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142542.py::test_c142542</td>
+          <td>None</td>
+          <td class="col-duration">83.49</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:00:59.752389</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142543.py::test_c142543</td>
+          <td>None</td>
+          <td class="col-duration">27.74</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:01:21.147613</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142544.py::test_c142544</td>
+          <td>None</td>
+          <td class="col-duration">21.39</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:01:42.049808</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142545.py::test_c142545</td>
+          <td>None</td>
+          <td class="col-duration">20.90</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:02:01.881942</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142546.py::test_c142546</td>
+          <td>None</td>
+          <td class="col-duration">19.83</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:02:22.722134</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142547.py::test_c142547</td>
+          <td>None</td>
+          <td class="col-duration">20.84</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:03:11.700936</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142549.py::test_c142549</td>
+          <td>None</td>
+          <td class="col-duration">48.98</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:05:49.360953</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142563.py::test_c142563</td>
+          <td>None</td>
+          <td class="col-duration">157.66</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:08:28.769071</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142564.py::test_c142564</td>
+          <td>None</td>
+          <td class="col-duration">159.40</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:08:57.212698</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142589.py::test_c142589</td>
+          <td>None</td>
+          <td class="col-duration">28.44</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:10:33.699217</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142599.py::test_c142599</td>
+          <td>None</td>
+          <td class="col-duration">96.48</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:11:19.034810</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142600.py::test_c142600</td>
+          <td>None</td>
+          <td class="col-duration">45.33</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:12:21.767398</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142601.py::test_c142601</td>
+          <td>None</td>
+          <td class="col-duration">62.73</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:16:35.032884</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142602.py::test_c142602</td>
+          <td>None</td>
+          <td class="col-duration">40.15</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:20:11.469263</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142603.py::test_c142603</td>
+          <td>None</td>
+          <td class="col-duration">216.43</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:23:48.637685</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142605.py::test_c142605</td>
+          <td>None</td>
+          <td class="col-duration">217.16</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:24:49.414161</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142607.py::test_c142607</td>
+          <td>None</td>
+          <td class="col-duration">60.77</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:25:47.024456</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142608.py::test_c142608</td>
+          <td>None</td>
+          <td class="col-duration">57.61</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:29:08.705991</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142609.py::test_c142609</td>
+          <td>None</td>
+          <td class="col-duration">201.68</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:30:52.971955</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142611.py::test_c142611</td>
+          <td>None</td>
+          <td class="col-duration">104.26</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:36:00.401539</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142616.py::test_c142616</td>
+          <td>None</td>
+          <td class="col-duration">146.40</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:36:31.291306</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142622.py::test_c142622</td>
+          <td>None</td>
+          <td class="col-duration">30.89</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:37:08.645442</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142623.py::test_c142623</td>
+          <td>None</td>
+          <td class="col-duration">37.35</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:38:20.194535</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142624.py::test_c142624</td>
+          <td>None</td>
+          <td class="col-duration">71.54</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:39:08.842317</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142625.py::test_c142625</td>
+          <td>None</td>
+          <td class="col-duration">48.64</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:39:23.450153</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142726.py::test_c142726</td>
+          <td>None</td>
+          <td class="col-duration">14.60</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 17:39:50.969727</td>
+          <td class="col-name">test_case/scg/scg_Nat_modify/test_c142727.py::test_c142727</td>
+          <td>None</td>
+          <td class="col-duration">24.96</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>

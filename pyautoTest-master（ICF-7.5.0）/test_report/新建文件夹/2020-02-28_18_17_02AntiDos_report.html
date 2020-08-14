@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <style>body {
+	font-family: Helvetica, Arial, sans-serif;
+	font-size: 12px;
+	min-width: 1200px;
+	color: #999;
+}
+
+h1 {
+	font-size: 24px;
+	color: black;
+}
+
+h2 {
+	font-size: 16px;
+	color: black;
+}
+
+p {
+    color: black;
+}
+
+a {
+	color: #999;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+
+#environment td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+}
+
+#environment tr:nth-child(odd) {
+	background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed, .passed .col-result {
+	color: green;
+}
+span.skipped, span.xfailed, span.rerun, .skipped .col-result, .xfailed .col-result, .rerun .col-result {
+	color: orange;
+}
+span.error, span.failed, span.xpassed, .error .col-result, .failed .col-result, .xpassed .col-result  {
+	color: red;
+}
+
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+
+#results-table {
+	border: 1px solid #e6e6e6;
+	color: #999;
+	font-size: 12px;
+	width: 100%
+}
+
+#results-table th, #results-table td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+	text-align: left
+}
+#results-table th {
+	font-weight: bold
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+
+.log:only-child {
+	height: inherit
+}
+.log {
+	background-color: #e6e6e6;
+	border: 1px solid #e6e6e6;
+	color: black;
+	display: block;
+	font-family: "Courier New", Courier, monospace;
+	height: 230px;
+	overflow-y: scroll;
+	padding: 5px;
+	white-space: pre-wrap
+}
+div.image {
+	border: 1px solid #e6e6e6;
+	float: right;
+	height: 240px;
+	margin-left: 5px;
+	overflow: hidden;
+	width: 320px
+}
+div.image img {
+	width: 320px
+}
+.collapsed {
+	display: none;
+}
+.expander::after {
+	content: " (show details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+.collapser::after {
+	content: " (hide details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+	cursor: pointer;
+}
+
+.sort-icon {
+	font-size: 0px;
+	float: left;
+	margin-right: 5px;
+	margin-top: 5px;
+	/*triangle*/
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+}
+
+.inactive .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #E6E6E6;
+}
+
+.asc.active .sort-icon {
+	/*finish triangle*/
+	border-bottom: 8px solid #999;
+}
+
+.desc.active .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>2020-02-28_18_17_02AntiDos_report.html</h1>
+    <p>Report generated on 28-Feb-2020 at 18:37:01 by<a href="https://pypi.python.org/pypi/pytest-html"> pytest-html</a> v1.19.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;3.6.3&apos;, &apos;py&apos;: &apos;1.8.0&apos;, &apos;pluggy&apos;: &apos;0.6.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-7-6.1.7601-SP1</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;rerunfailures&apos;: &apos;4.1&apos;, &apos;metadata&apos;: &apos;1.8.0&apos;, &apos;html&apos;: &apos;1.19.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.0</td></tr></table>
+    <h2>Summary</h2>
+    <p>43 tests ran in 1199.22 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">43 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">1 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable time" col="time">Time</th>
+          <th class="sortable" col="name">Test</th>
+          <th>Description</th>
+          <th class="sortable numeric" col="duration">Duration</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="5">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-02-28 10:22:28.285731</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140604.py::test_c140604</td>
+          <td>None</td>
+          <td class="col-duration">104.74</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;858d0e43a49635188fe3fdff0484e246&quot;)&gt;<br/><br/>    def test_c140604(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		antiddos_settings_wxw(browser, function_enable=&#x27;yes&#x27;, function_disable=&#x27;no&#x27;,<br/>    							  syn_cookie=&#x27;yes&#x27;, allways_on=&#x27;no&#x27;, intelligent_defense=&#x27;yes&#x27;,<br/>    							  log_enable=&#x27;yes&#x27;, log_messages=&#x27;100&#x27;,<br/>    							  other_dos_attack=&#x27;no&#x27;,<br/>    							  land_attack=&#x27;yes/no&#x27;, ping_of_death=&#x27;yes/no&#x27;, winnuke=&#x27;yes/no&#x27;,<br/>    							  replay_attack=&#x27;yes/no&#x27;, smurf=&#x27;yes/no&#x27;, ip_fragment_attack=&#x27;yes/no&#x27;)<br/>    <br/>    		add_antiddos_profile_wxw(browser, name=&#x27;anti_pro_jia_1&#x27;, desc=&#x27;1&#x27;, schdule=&#x27;请选择&#x27;,<br/>    								 sn_perrule=&#x27;0&#x27;, sn_perip=&#x27;0&#x27;, sn_sche_perrule=&#x27;0&#x27;, sn_sche_perip=&#x27;0&#x27;,<br/>    								 ss_perrule=&#x27;0&#x27;, ss_perip=&#x27;0&#x27;, ss_sche_perrule=&#x27;0&#x27;, ss_sche_perip=&#x27;0&#x27;,<br/>    								 ps_perrule=&#x27;0&#x27;, ps_perip=&#x27;0&#x27;, ps_sche_perrule=&#x27;0&#x27;, ps_sche_perip=&#x27;0&#x27;,<br/>    								 synlow=&#x27;0&#x27;, synhigh=&#x27;0&#x27;, save=&#x27;yes&#x27;, cancel=&#x27;yes/no&#x27;)<br/>    <br/>    		add_antiddos_rule_wxw(browser, name=&#x27;antiddos_profile_jia_12345678901&#x27;, desc=str_256, zone=interface_name_4,<br/>    							  s_any=&#x27;yes&#x27;, s_single_ip=&#x27;yes/no&#x27;, saddress_sip=&#x27;&#x27;,<br/>    							  s_ip=&#x27;yes/no&#x27;, saddress_custom=&#x27;&#x27;, saddress_mask=&#x27;&#x27;,<br/>    							  d_any=&#x27;yes&#x27;, d_single_ip=&#x27;yes/no&#x27;, daddress_sip=&#x27;&#x27;,<br/>    							  d_ip=&#x27;yes/no&#x27;, daddress_custom=&#x27;&#x27;, daddress_mask=&#x27;&#x27;,<br/>    							  serv=&#x27;P:any&#x27;, profile=&#x27;anti_pro_jia_1&#x27;, monitor=&#x27;yes&#x27;, defense=&#x27;yes/no&#x27;,<br/>    							  save=&#x27;yes&#x27;, cancel=&#x27;yes/no&#x27;)<br/>    <br/>    		loginfo = get_log_info(browser, 管理日志)<br/>    <br/>&gt;   		del_antiddos_rule_wxw(browser, name=&#x27;antiddos_profile_jia_12345678901&#x27;)<br/><br/>test_case\scg\scg_AntiDos\test_c140604.py:42: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;858d0e43a49635188fe3fdff0484e246&quot;)&gt;<br/>name = &#x27;antiddos_profile_jia_12345678901&#x27;<br/><br/>    def del_antiddos_rule_wxw(browser, name=&#x27;rule&#x27;):<br/>        # 切换到默认frame<br/>        # browser.switch_to.default_content()<br/>        # # 切换到左侧frame<br/>        # browser.switch_to.frame(&quot;lefttree&quot;)<br/>        # # 点击Anti_DDoS<br/>        # browser.find_element_by_xpath(Anti_DDoS).click()<br/>        # # 点击Anti_DDoS规则列表<br/>        # browser.find_element_by_xpath(Anti_DDoS规则列表).click()<br/>        # # 定位到默认frame<br/>        # browser.switch_to.default_content()<br/>        # # 定位到内容frame<br/>        # browser.switch_to.frame(&quot;content&quot;)<br/>        into_fun(browser, Anti_DDoS规则列表)<br/>        # 点击删除<br/>        n = 3<br/>&gt;       getname = browser.find_element_by_xpath(&#x27;//*[@id=&quot;table&quot;]/tbody/tr[&#x27;+str(n)+&#x27;]/td[2]&#x27;).text.replace(&#x27; &#x27;, &#x27;&#x27;)<br/><br/>page_obj\scg\scg_def_antiddos.py:326: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;858d0e43a49635188fe3fdff0484e246&quot;)&gt;<br/>xpath = &#x27;//*[@id=&quot;table&quot;]/tbody/tr[3]/td[2]&#x27;<br/><br/>    def find_element_by_xpath(self, xpath):<br/>        &quot;&quot;&quot;<br/>            Finds an element by xpath.<br/>    <br/>            :Args:<br/>             - xpath - The xpath locator of the element to find.<br/>    <br/>            :Returns:<br/>             - WebElement - the element if it was found<br/>    <br/>            :Raises:<br/>             - NoSuchElementException - if the element wasn&#x27;t found<br/>    <br/>            :Usage:<br/>                element = driver.find_element_by_xpath(&#x27;//div/td[1]&#x27;)<br/>            &quot;&quot;&quot;<br/>&gt;       return self.find_element(by=By.XPATH, value=xpath)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:393: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;858d0e43a49635188fe3fdff0484e246&quot;)&gt;<br/>by = &#x27;xpath&#x27;, value = &#x27;//*[@id=&quot;table&quot;]/tbody/tr[3]/td[2]&#x27;<br/><br/>    def find_element(self, by=By.ID, value=None):<br/>        &quot;&quot;&quot;<br/>            Find an element given a By strategy and locator. Prefer the find_element_by_* methods when<br/>            possible.<br/>    <br/>            :Usage:<br/>                element = driver.find_element(By.ID, &#x27;foo&#x27;)<br/>    <br/>            :rtype: WebElement<br/>            &quot;&quot;&quot;<br/>        if self.w3c:<br/>            if by == By.ID:<br/>                by = By.CSS_SELECTOR<br/>                value = &#x27;[id=&quot;%s&quot;]&#x27; % value<br/>            elif by == By.TAG_NAME:<br/>                by = By.CSS_SELECTOR<br/>            elif by == By.CLASS_NAME:<br/>                by = By.CSS_SELECTOR<br/>                value = &quot;.%s&quot; % value<br/>            elif by == By.NAME:<br/>                by = By.CSS_SELECTOR<br/>                value = &#x27;[name=&quot;%s&quot;]&#x27; % value<br/>        return self.execute(Command.FIND_ELEMENT, {<br/>            &#x27;using&#x27;: by,<br/>&gt;           &#x27;value&#x27;: value})[&#x27;value&#x27;]<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:966: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;858d0e43a49635188fe3fdff0484e246&quot;)&gt;<br/>driver_command = &#x27;findElement&#x27;<br/>params = {&#x27;sessionId&#x27;: &#x27;858d0e43a49635188fe3fdff0484e246&#x27;, &#x27;using&#x27;: &#x27;xpath&#x27;, &#x27;value&#x27;: &#x27;//*[@id=&quot;table&quot;]/tbody/tr[3]/td[2]&#x27;}<br/><br/>    def execute(self, driver_command, params=None):<br/>        &quot;&quot;&quot;<br/>            Sends a command to be executed by a command.CommandExecutor.<br/>    <br/>            :Args:<br/>             - driver_command: The name of the command to execute as a string.<br/>             - params: A dictionary of named parameters to send with the command.<br/>    <br/>            :Returns:<br/>              The command&#x27;s JSON response loaded into a dictionary object.<br/>            &quot;&quot;&quot;<br/>        if self.session_id is not None:<br/>            if not params:<br/>                params = {&#x27;sessionId&#x27;: self.session_id}<br/>            elif &#x27;sessionId&#x27; not in params:<br/>                params[&#x27;sessionId&#x27;] = self.session_id<br/>    <br/>        params = self._wrap_value(params)<br/>        response = self.command_executor.execute(driver_command, params)<br/>        if response:<br/>&gt;           self.error_handler.check_response(response)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:320: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x0000000007A52D30&gt;<br/>response = {&#x27;sessionId&#x27;: &#x27;858d0e43a49635188fe3fdff0484e246&#x27;, &#x27;status&#x27;: 7, &#x27;value&#x27;: {&#x27;message&#x27;: &#x27;no such element: Unable to locate...r info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)&#x27;}}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>            Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>            :Args:<br/>             - response - The JSON response from the WebDriver server as a dictionary<br/>               object.<br/>    <br/>            :Raises: If the response contains an error message.<br/>            &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchElementException: Message: no such element: Unable to locate element: {&quot;method&quot;:&quot;xpath&quot;,&quot;selector&quot;:&quot;//*[@id=&quot;table&quot;]/tbody/tr[3]/td[2]&quot;}</span><br/><span class="error">E         (Session info: chrome=80.0.3987.122)</span><br/><span class="error">E         (Driver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)</span><br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\errorhandler.py:242: NoSuchElementException<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;858d0e43a49635188fe3fdff0484e246&quot;)&gt;<br/><br/>    def test_c140604(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		antiddos_settings_wxw(browser, function_enable=&#x27;yes&#x27;, function_disable=&#x27;no&#x27;,<br/>    							  syn_cookie=&#x27;yes&#x27;, allways_on=&#x27;no&#x27;, intelligent_defense=&#x27;yes&#x27;,<br/>    							  log_enable=&#x27;yes&#x27;, log_messages=&#x27;100&#x27;,<br/>    							  other_dos_attack=&#x27;no&#x27;,<br/>    							  land_attack=&#x27;yes/no&#x27;, ping_of_death=&#x27;yes/no&#x27;, winnuke=&#x27;yes/no&#x27;,<br/>    							  replay_attack=&#x27;yes/no&#x27;, smurf=&#x27;yes/no&#x27;, ip_fragment_attack=&#x27;yes/no&#x27;)<br/>    <br/>    		add_antiddos_profile_wxw(browser, name=&#x27;anti_pro_jia_1&#x27;, desc=&#x27;1&#x27;, schdule=&#x27;请选择&#x27;,<br/>    								 sn_perrule=&#x27;0&#x27;, sn_perip=&#x27;0&#x27;, sn_sche_perrule=&#x27;0&#x27;, sn_sche_perip=&#x27;0&#x27;,<br/>    								 ss_perrule=&#x27;0&#x27;, ss_perip=&#x27;0&#x27;, ss_sche_perrule=&#x27;0&#x27;, ss_sche_perip=&#x27;0&#x27;,<br/>    								 ps_perrule=&#x27;0&#x27;, ps_perip=&#x27;0&#x27;, ps_sche_perrule=&#x27;0&#x27;, ps_sche_perip=&#x27;0&#x27;,<br/>    								 synlow=&#x27;0&#x27;, synhigh=&#x27;0&#x27;, save=&#x27;yes&#x27;, cancel=&#x27;yes/no&#x27;)<br/>    <br/>    		add_antiddos_rule_wxw(browser, name=&#x27;antiddos_profile_jia_12345678901&#x27;, desc=str_256, zone=interface_name_4,<br/>    							  s_any=&#x27;yes&#x27;, s_single_ip=&#x27;yes/no&#x27;, saddress_sip=&#x27;&#x27;,<br/>    							  s_ip=&#x27;yes/no&#x27;, saddress_custom=&#x27;&#x27;, saddress_mask=&#x27;&#x27;,<br/>    							  d_any=&#x27;yes&#x27;, d_single_ip=&#x27;yes/no&#x27;, daddress_sip=&#x27;&#x27;,<br/>    							  d_ip=&#x27;yes/no&#x27;, daddress_custom=&#x27;&#x27;, daddress_mask=&#x27;&#x27;,<br/>    							  serv=&#x27;P:any&#x27;, profile=&#x27;anti_pro_jia_1&#x27;, monitor=&#x27;yes&#x27;, defense=&#x27;yes/no&#x27;,<br/>    							  save=&#x27;yes&#x27;, cancel=&#x27;yes/no&#x27;)<br/>    <br/>    		loginfo = get_log_info(browser, 管理日志)<br/>    <br/>    		del_antiddos_rule_wxw(browser, name=&#x27;antiddos_profile_jia_12345678901&#x27;)<br/>    <br/>    		del_antiddos_profile_wxw(browser, name=&#x27;anti_pro_jia_1&#x27;)<br/>    <br/>    		antiddos_settings_wxw(browser, function_enable=&quot;no&quot;, function_disable=&#x27;yes&#x27;,<br/>    							  syn_cookie=&#x27;no&#x27;, allways_on=&#x27;no&#x27;, intelligent_defense=&#x27;yes&#x27;,<br/>    							  log_enable=&#x27;no&#x27;, log_messages=&#x27;1&#x27;,<br/>    							  other_dos_attack=&#x27;no&#x27;,<br/>    							  land_attack=&#x27;yes/no&#x27;, ping_of_death=&#x27;yes/no&#x27;, winnuke=&#x27;yes/no&#x27;,<br/>    							  replay_attack=&#x27;yes/no&#x27;, smurf=&#x27;yes/no&#x27;, ip_fragment_attack=&#x27;yes/no&#x27;)<br/>    <br/>    		try:<br/>    			assert &quot;添加规则&quot; in loginfo<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;添加规则&quot; in loginfo<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_AntiDos\test_c140604.py:66: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:17:42.295373</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140592.py::test_c140592</td>
+          <td>None</td>
+          <td class="col-duration">14.06</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:18:04.588649</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140593.py::test_c140593</td>
+          <td>None</td>
+          <td class="col-duration">22.29</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:18:19.948527</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140594.py::test_c140594</td>
+          <td>None</td>
+          <td class="col-duration">15.36</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:18:31.809205</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140595.py::test_c140595</td>
+          <td>None</td>
+          <td class="col-duration">11.86</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:18:48.798177</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140596.py::test_c140596</td>
+          <td>None</td>
+          <td class="col-duration">16.98</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:19:00.562850</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140597.py::test_c140597</td>
+          <td>None</td>
+          <td class="col-duration">11.76</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:19:17.525820</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140598.py::test_c140598</td>
+          <td>None</td>
+          <td class="col-duration">16.96</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:19:32.207660</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140599.py::test_c140599</td>
+          <td>None</td>
+          <td class="col-duration">14.68</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:19:48.287580</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140600.py::test_c140600</td>
+          <td>None</td>
+          <td class="col-duration">16.08</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:20:05.883586</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140601.py::test_c140601</td>
+          <td>None</td>
+          <td class="col-duration">17.59</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:20:24.850671</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140602.py::test_c140602</td>
+          <td>None</td>
+          <td class="col-duration">18.96</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:20:43.330728</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140603.py::test_c140603</td>
+          <td>None</td>
+          <td class="col-duration">18.48</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:22:58.223443</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140604.py::test_c140604</td>
+          <td>None</td>
+          <td class="col-duration">29.93</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:23:23.874911</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140606.py::test_c140606</td>
+          <td>None</td>
+          <td class="col-duration">25.65</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:23:43.223017</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140607.py::test_c140607</td>
+          <td>None</td>
+          <td class="col-duration">19.34</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:24:09.662530</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140608.py::test_c140608</td>
+          <td>None</td>
+          <td class="col-duration">26.44</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:25:01.251480</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140609.py::test_c140609</td>
+          <td>None</td>
+          <td class="col-duration">51.59</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:26:19.807973</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140614.py::test_c140614</td>
+          <td>None</td>
+          <td class="col-duration">78.55</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:27:38.892497</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140615.py::test_c140615</td>
+          <td>None</td>
+          <td class="col-duration">79.08</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:27:57.708573</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140616.py::test_c140616</td>
+          <td>None</td>
+          <td class="col-duration">18.81</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:28:12.946445</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140617.py::test_c140617</td>
+          <td>None</td>
+          <td class="col-duration">15.23</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:28:37.124828</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140618.py::test_c140618</td>
+          <td>None</td>
+          <td class="col-duration">24.17</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:29:34.808127</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140620.py::test_c140620</td>
+          <td>None</td>
+          <td class="col-duration">57.68</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:29:48.099887</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140624.py::test_c140624</td>
+          <td>None</td>
+          <td class="col-duration">13.29</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:30:04.024798</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140625.py::test_c140625</td>
+          <td>None</td>
+          <td class="col-duration">15.92</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:30:20.962767</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140626.py::test_c140626</td>
+          <td>None</td>
+          <td class="col-duration">16.93</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:30:36.717668</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140627.py::test_c140627</td>
+          <td>None</td>
+          <td class="col-duration">15.75</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:30:52.807588</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140629.py::test_c140629</td>
+          <td>None</td>
+          <td class="col-duration">16.09</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:31:44.143524</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140630.py::test_c140630</td>
+          <td>None</td>
+          <td class="col-duration">51.33</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:33:19.192961</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140635.py::test_c140635</td>
+          <td>None</td>
+          <td class="col-duration">95.05</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:33:43.784367</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140641.py::test_c140641</td>
+          <td>None</td>
+          <td class="col-duration">24.59</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:34:08.764796</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140703.py::test_c140703</td>
+          <td>None</td>
+          <td class="col-duration">24.98</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:34:47.560015</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140722.py::test_c140722</td>
+          <td>None</td>
+          <td class="col-duration">38.79</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:34:59.657707</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140758.py::test_c140758</td>
+          <td>None</td>
+          <td class="col-duration">12.09</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:35:24.890150</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140759.py::test_c140759</td>
+          <td>None</td>
+          <td class="col-duration">25.23</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:35:37.399866</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140760.py::test_c140760</td>
+          <td>None</td>
+          <td class="col-duration">12.51</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:35:50.419611</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140761.py::test_c140761</td>
+          <td>None</td>
+          <td class="col-duration">13.02</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:36:03.074334</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140762.py::test_c140762</td>
+          <td>None</td>
+          <td class="col-duration">12.65</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:36:15.836064</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140763.py::test_c140763</td>
+          <td>None</td>
+          <td class="col-duration">12.76</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:36:28.143768</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140764.py::test_c140764</td>
+          <td>None</td>
+          <td class="col-duration">12.30</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:36:43.600652</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140765.py::test_c140765</td>
+          <td>None</td>
+          <td class="col-duration">15.45</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:36:51.524106</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140766.py::test_c140766</td>
+          <td>None</td>
+          <td class="col-duration">7.92</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 10:37:01.928701</td>
+          <td class="col-name">test_case/scg/scg_AntiDos/test_c140767.py::test_c140767</td>
+          <td>None</td>
+          <td class="col-duration">7.85</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>

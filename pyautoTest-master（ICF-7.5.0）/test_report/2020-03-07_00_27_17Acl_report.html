@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <style>body {
+	font-family: Helvetica, Arial, sans-serif;
+	font-size: 12px;
+	min-width: 1200px;
+	color: #999;
+}
+
+h1 {
+	font-size: 24px;
+	color: black;
+}
+
+h2 {
+	font-size: 16px;
+	color: black;
+}
+
+p {
+    color: black;
+}
+
+a {
+	color: #999;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+
+#environment td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+}
+
+#environment tr:nth-child(odd) {
+	background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed, .passed .col-result {
+	color: green;
+}
+span.skipped, span.xfailed, span.rerun, .skipped .col-result, .xfailed .col-result, .rerun .col-result {
+	color: orange;
+}
+span.error, span.failed, span.xpassed, .error .col-result, .failed .col-result, .xpassed .col-result  {
+	color: red;
+}
+
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+
+#results-table {
+	border: 1px solid #e6e6e6;
+	color: #999;
+	font-size: 12px;
+	width: 100%
+}
+
+#results-table th, #results-table td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+	text-align: left
+}
+#results-table th {
+	font-weight: bold
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+
+.log:only-child {
+	height: inherit
+}
+.log {
+	background-color: #e6e6e6;
+	border: 1px solid #e6e6e6;
+	color: black;
+	display: block;
+	font-family: "Courier New", Courier, monospace;
+	height: 230px;
+	overflow-y: scroll;
+	padding: 5px;
+	white-space: pre-wrap
+}
+div.image {
+	border: 1px solid #e6e6e6;
+	float: right;
+	height: 240px;
+	margin-left: 5px;
+	overflow: hidden;
+	width: 320px
+}
+div.image img {
+	width: 320px
+}
+.collapsed {
+	display: none;
+}
+.expander::after {
+	content: " (show details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+.collapser::after {
+	content: " (hide details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+	cursor: pointer;
+}
+
+.sort-icon {
+	font-size: 0px;
+	float: left;
+	margin-right: 5px;
+	margin-top: 5px;
+	/*triangle*/
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+}
+
+.inactive .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #E6E6E6;
+}
+
+.asc.active .sort-icon {
+	/*finish triangle*/
+	border-bottom: 8px solid #999;
+}
+
+.desc.active .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>2020-03-07_00_27_17Acl_report.html</h1>
+    <p>Report generated on 07-Mar-2020 at 02:26:46 by<a href="https://pypi.python.org/pypi/pytest-html"> pytest-html</a> v1.19.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;3.6.3&apos;, &apos;py&apos;: &apos;1.8.0&apos;, &apos;pluggy&apos;: &apos;0.6.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-7-6.1.7601-SP1</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;rerunfailures&apos;: &apos;4.1&apos;, &apos;metadata&apos;: &apos;1.8.0&apos;, &apos;html&apos;: &apos;1.19.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.0</td></tr></table>
+    <h2>Summary</h2>
+    <p>63 tests ran in 7169.20 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">62 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">1 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">2 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable time" col="time">Time</th>
+          <th class="sortable" col="name">Test</th>
+          <th>Description</th>
+          <th class="sortable numeric" col="duration">Duration</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="5">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-time">2020-03-06 17:45:02.566130</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143974.py::test_c143974</td>
+          <td>None</td>
+          <td class="col-duration">201.71</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;88b70ae224c5cff5435a56e6f0206fbd&quot;)&gt;<br/><br/>    def test_c143974(browser):<br/>    	try:<br/>    <br/>    		login_web(browser, url=dev1)<br/>    <br/>    		# 配路由使8283通<br/>    		# 82上添加经过81到83路由<br/>    		shell_82 = Shell_SSH()<br/>    		shell_82.connect(hostip=dev2)<br/>    		shell_82.execute(&quot;en&quot;)<br/>    		shell_82.execute(&quot;conf t&quot;)<br/>    		shell_82.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		shell_82.close()<br/>    <br/>    		# 83上添加经过81到82的路由<br/>    		shell_83 = Shell_SSH()<br/>    		shell_83.connect(hostip=dev3)<br/>    		shell_83.execute(&quot;en&quot;)<br/>    		shell_83.execute(&quot;conf t&quot;)<br/>    		shell_83.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		shell_83.close()<br/>    <br/>    		# 删除默认规则<br/>    		del_default_acl_group_lzy(browser)<br/>    		sleep(2)<br/>    		# 添加组，添加规则（mac非PC机的网卡mac地址）<br/>    		add_ipv4_aclgroup_lzy(browser, group_name=&#x27;lzy&#x27;)<br/>    		add_ipv4acl_lzy(browser, aclgroup_name=&#x27;lzy&#x27;, mac=&#x27;00:16:31:EE:03:22&#x27;)<br/>    		sleep(2)<br/>    <br/>    		# 登录83，看能否ping通82<br/>    		login_web(browser, url=dev3)<br/>    		sleep(1)<br/>    		info1 = diag_ping(browser, ipadd=&quot;12.1.1.2&quot;, interface=interface_name_2, timesleep=10)<br/>    		# print(info1)<br/>    		sleep(2)<br/>    <br/>    		# 登录81，mac为正确地址<br/>    		login_web(browser, url=dev1)<br/>    		edit_acl_rule_wxw(browser, aclgroup_name=&#x27;lzy&#x27;, source_zone_interface=&#x27;Z:any&#x27;,<br/>    						  mac=mac_dev2_interface_2, dest_zone_interface=&#x27;Z:any&#x27;)<br/>    <br/>    		# 登录83，看能否ping通82<br/>    		login_web(browser, url=dev3)<br/>    		sleep(1)<br/>    		info2 = diag_ping(browser, ipadd=&quot;12.1.1.2&quot;, interface=interface_name_2, timesleep=5)<br/>    		# print(info2)<br/>    		sleep(2)<br/>    <br/>    <br/>    		# 还原<br/>    		# 删ACL<br/>    		login_web(browser, url=dev1)<br/>    		del_all_acl_group_lzy(browser)<br/>    		sleep(2)<br/>    <br/>    		# 删82上路由<br/>    		shell_82 = Shell_SSH()<br/>    		shell_82.connect(hostip=dev2)<br/>    		shell_82.execute(&quot;en&quot;)<br/>    		shell_82.execute(&quot;conf t&quot;)<br/>    		shell_82.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		shell_82.close()<br/>    <br/>    <br/>    		# 删83上路由<br/>    		shell_83 = Shell_SSH()<br/>    		shell_83.connect(hostip=dev3)<br/>    		shell_83.execute(&quot;en&quot;)<br/>    		shell_83.execute(&quot;conf t&quot;)<br/>    		shell_83.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		shell_83.close()<br/>    <br/>    		try:<br/>&gt;   			assert &#x27;Destination Host Unreachable&#x27; in info1 and &#x27;ms&#x27; in info2<br/><span class="error">E      AssertionError: assert (&#x27;Destination Host Unreachable&#x27; in &#x27;PING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\nPing 12.1.1.2 icmp_seq=2  Destination Host Unreachable\nPing 12.1.1.2 icmp_seq=3  Destination Host Unre&#x27; and &#x27;ms&#x27; in &#x27;PING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\nPing 12.1.1.2 icmp_seq=1  Destination Host Unre&#x27;)</span><br/><br/>test_case\scg\scg_Acl\test_c143974.py:99: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;88b70ae224c5cff5435a56e6f0206fbd&quot;)&gt;<br/><br/>    def test_c143974(browser):<br/>    	try:<br/>    <br/>    		login_web(browser, url=dev1)<br/>    <br/>    		# 配路由使8283通<br/>    		# 82上添加经过81到83路由<br/>    		shell_82 = Shell_SSH()<br/>    		shell_82.connect(hostip=dev2)<br/>    		shell_82.execute(&quot;en&quot;)<br/>    		shell_82.execute(&quot;conf t&quot;)<br/>    		shell_82.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		shell_82.close()<br/>    <br/>    		# 83上添加经过81到82的路由<br/>    		shell_83 = Shell_SSH()<br/>    		shell_83.connect(hostip=dev3)<br/>    		shell_83.execute(&quot;en&quot;)<br/>    		shell_83.execute(&quot;conf t&quot;)<br/>    		shell_83.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		shell_83.close()<br/>    <br/>    		# 删除默认规则<br/>    		del_default_acl_group_lzy(browser)<br/>    		sleep(2)<br/>    		# 添加组，添加规则（mac非PC机的网卡mac地址）<br/>    		add_ipv4_aclgroup_lzy(browser, group_name=&#x27;lzy&#x27;)<br/>    		add_ipv4acl_lzy(browser, aclgroup_name=&#x27;lzy&#x27;, mac=&#x27;00:16:31:EE:03:22&#x27;)<br/>    		sleep(2)<br/>    <br/>    		# 登录83，看能否ping通82<br/>    		login_web(browser, url=dev3)<br/>    		sleep(1)<br/>    		info1 = diag_ping(browser, ipadd=&quot;12.1.1.2&quot;, interface=interface_name_2, timesleep=10)<br/>    		# print(info1)<br/>    		sleep(2)<br/>    <br/>    		# 登录81，mac为正确地址<br/>    		login_web(browser, url=dev1)<br/>    		edit_acl_rule_wxw(browser, aclgroup_name=&#x27;lzy&#x27;, source_zone_interface=&#x27;Z:any&#x27;,<br/>    						  mac=mac_dev2_interface_2, dest_zone_interface=&#x27;Z:any&#x27;)<br/>    <br/>    		# 登录83，看能否ping通82<br/>    		login_web(browser, url=dev3)<br/>    		sleep(1)<br/>    		info2 = diag_ping(browser, ipadd=&quot;12.1.1.2&quot;, interface=interface_name_2, timesleep=5)<br/>    		# print(info2)<br/>    		sleep(2)<br/>    <br/>    <br/>    		# 还原<br/>    		# 删ACL<br/>    		login_web(browser, url=dev1)<br/>    		del_all_acl_group_lzy(browser)<br/>    		sleep(2)<br/>    <br/>    		# 删82上路由<br/>    		shell_82 = Shell_SSH()<br/>    		shell_82.connect(hostip=dev2)<br/>    		shell_82.execute(&quot;en&quot;)<br/>    		shell_82.execute(&quot;conf t&quot;)<br/>    		shell_82.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		shell_82.close()<br/>    <br/>    <br/>    		# 删83上路由<br/>    		shell_83 = Shell_SSH()<br/>    		shell_83.connect(hostip=dev3)<br/>    		shell_83.execute(&quot;en&quot;)<br/>    		shell_83.execute(&quot;conf t&quot;)<br/>    		shell_83.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		shell_83.close()<br/>    <br/>    		try:<br/>    			assert &#x27;Destination Host Unreachable&#x27; in info1 and &#x27;ms&#x27; in info2<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>&gt;   			assert &#x27;Destination Host Unreachable&#x27; in info1 and &#x27;ms&#x27; in info2<br/><span class="error">E      AssertionError: assert (&#x27;Destination Host Unreachable&#x27; in &#x27;PING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\nPing 12.1.1.2 icmp_seq=2  Destination Host Unreachable\nPing 12.1.1.2 icmp_seq=3  Destination Host Unre&#x27; and &#x27;ms&#x27; in &#x27;PING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\nPing 12.1.1.2 icmp_seq=1  Destination Host Unre&#x27;)</span><br/><br/>test_case\scg\scg_Acl\test_c143974.py:104: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;88b70ae224c5cff5435a56e6f0206fbd&quot;)&gt;<br/><br/>    def test_c143974(browser):<br/>    	try:<br/>    <br/>    		login_web(browser, url=dev1)<br/>    <br/>    		# 配路由使8283通<br/>    		# 82上添加经过81到83路由<br/>    		shell_82 = Shell_SSH()<br/>    		shell_82.connect(hostip=dev2)<br/>    		shell_82.execute(&quot;en&quot;)<br/>    		shell_82.execute(&quot;conf t&quot;)<br/>    		shell_82.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		shell_82.close()<br/>    <br/>    		# 83上添加经过81到82的路由<br/>    		shell_83 = Shell_SSH()<br/>    		shell_83.connect(hostip=dev3)<br/>    		shell_83.execute(&quot;en&quot;)<br/>    		shell_83.execute(&quot;conf t&quot;)<br/>    		shell_83.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		shell_83.close()<br/>    <br/>    		# 删除默认规则<br/>    		del_default_acl_group_lzy(browser)<br/>    		sleep(2)<br/>    		# 添加组，添加规则（mac非PC机的网卡mac地址）<br/>    		add_ipv4_aclgroup_lzy(browser, group_name=&#x27;lzy&#x27;)<br/>    		add_ipv4acl_lzy(browser, aclgroup_name=&#x27;lzy&#x27;, mac=&#x27;00:16:31:EE:03:22&#x27;)<br/>    		sleep(2)<br/>    <br/>    		# 登录83，看能否ping通82<br/>    		login_web(browser, url=dev3)<br/>    		sleep(1)<br/>    		info1 = diag_ping(browser, ipadd=&quot;12.1.1.2&quot;, interface=interface_name_2, timesleep=10)<br/>    		# print(info1)<br/>    		sleep(2)<br/>    <br/>    		# 登录81，mac为正确地址<br/>    		login_web(browser, url=dev1)<br/>    		edit_acl_rule_wxw(browser, aclgroup_name=&#x27;lzy&#x27;, source_zone_interface=&#x27;Z:any&#x27;,<br/>    						  mac=mac_dev2_interface_2, dest_zone_interface=&#x27;Z:any&#x27;)<br/>    <br/>    		# 登录83，看能否ping通82<br/>    		login_web(browser, url=dev3)<br/>    		sleep(1)<br/>    		info2 = diag_ping(browser, ipadd=&quot;12.1.1.2&quot;, interface=interface_name_2, timesleep=5)<br/>    		# print(info2)<br/>    		sleep(2)<br/>    <br/>    <br/>    		# 还原<br/>    		# 删ACL<br/>    		login_web(browser, url=dev1)<br/>    		del_all_acl_group_lzy(browser)<br/>    		sleep(2)<br/>    <br/>    		# 删82上路由<br/>    		shell_82 = Shell_SSH()<br/>    		shell_82.connect(hostip=dev2)<br/>    		shell_82.execute(&quot;en&quot;)<br/>    		shell_82.execute(&quot;conf t&quot;)<br/>    		shell_82.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		shell_82.close()<br/>    <br/>    <br/>    		# 删83上路由<br/>    		shell_83 = Shell_SSH()<br/>    		shell_83.connect(hostip=dev3)<br/>    		shell_83.execute(&quot;en&quot;)<br/>    		shell_83.execute(&quot;conf t&quot;)<br/>    		shell_83.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		shell_83.close()<br/>    <br/>    		try:<br/>    			assert &#x27;Destination Host Unreachable&#x27; in info1 and &#x27;ms&#x27; in info2<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &#x27;Destination Host Unreachable&#x27; in info1 and &#x27;ms&#x27; in info2<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		reload(hostip=[dev1, dev2, dev3])<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_Acl\test_c143974.py:111: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-06 17:41:40.821591</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143974.py::test_c143974</td>
+          <td>None</td>
+          <td class="col-duration">197.67</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;88b70ae224c5cff5435a56e6f0206fbd&quot;)&gt;<br/><br/>    def test_c143974(browser):<br/>    	try:<br/>    <br/>    		login_web(browser, url=dev1)<br/>    <br/>    		# 配路由使8283通<br/>    		# 82上添加经过81到83路由<br/>    		shell_82 = Shell_SSH()<br/>    		shell_82.connect(hostip=dev2)<br/>    		shell_82.execute(&quot;en&quot;)<br/>    		shell_82.execute(&quot;conf t&quot;)<br/>    		shell_82.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		shell_82.close()<br/>    <br/>    		# 83上添加经过81到82的路由<br/>    		shell_83 = Shell_SSH()<br/>    		shell_83.connect(hostip=dev3)<br/>    		shell_83.execute(&quot;en&quot;)<br/>    		shell_83.execute(&quot;conf t&quot;)<br/>    		shell_83.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		shell_83.close()<br/>    <br/>    		# 删除默认规则<br/>    		del_default_acl_group_lzy(browser)<br/>    		sleep(2)<br/>    		# 添加组，添加规则（mac非PC机的网卡mac地址）<br/>    		add_ipv4_aclgroup_lzy(browser, group_name=&#x27;lzy&#x27;)<br/>    		add_ipv4acl_lzy(browser, aclgroup_name=&#x27;lzy&#x27;, mac=&#x27;00:16:31:EE:03:22&#x27;)<br/>    		sleep(2)<br/>    <br/>    		# 登录83，看能否ping通82<br/>    		login_web(browser, url=dev3)<br/>    		sleep(1)<br/>    		info1 = diag_ping(browser, ipadd=&quot;12.1.1.2&quot;, interface=interface_name_2, timesleep=10)<br/>    		# print(info1)<br/>    		sleep(2)<br/>    <br/>    		# 登录81，mac为正确地址<br/>    		login_web(browser, url=dev1)<br/>    		edit_acl_rule_wxw(browser, aclgroup_name=&#x27;lzy&#x27;, source_zone_interface=&#x27;Z:any&#x27;,<br/>    						  mac=mac_dev2_interface_2, dest_zone_interface=&#x27;Z:any&#x27;)<br/>    <br/>    		# 登录83，看能否ping通82<br/>    		login_web(browser, url=dev3)<br/>    		sleep(1)<br/>    		info2 = diag_ping(browser, ipadd=&quot;12.1.1.2&quot;, interface=interface_name_2, timesleep=5)<br/>    		# print(info2)<br/>    		sleep(2)<br/>    <br/>    <br/>    		# 还原<br/>    		# 删ACL<br/>    		login_web(browser, url=dev1)<br/>    		del_all_acl_group_lzy(browser)<br/>    		sleep(2)<br/>    <br/>    		# 删82上路由<br/>    		shell_82 = Shell_SSH()<br/>    		shell_82.connect(hostip=dev2)<br/>    		shell_82.execute(&quot;en&quot;)<br/>    		shell_82.execute(&quot;conf t&quot;)<br/>    		shell_82.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		shell_82.close()<br/>    <br/>    <br/>    		# 删83上路由<br/>    		shell_83 = Shell_SSH()<br/>    		shell_83.connect(hostip=dev3)<br/>    		shell_83.execute(&quot;en&quot;)<br/>    		shell_83.execute(&quot;conf t&quot;)<br/>    		shell_83.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		shell_83.close()<br/>    <br/>    		try:<br/>&gt;   			assert &#x27;Destination Host Unreachable&#x27; in info1 and &#x27;ms&#x27; in info2<br/><span class="error">E      AssertionError: assert (&#x27;Destination Host Unreachable&#x27; in &#x27;PING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\nPing 12.1.1.2 icmp_seq=2  Destination Host Unreachable\nPing 12.1.1.2 icmp_seq=3  Destination Host Unr&#x27; and &#x27;ms&#x27; in &#x27;PING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\nPing 12.1.1.2 icmp_seq=1  Destination Host Unr&#x27;)</span><br/><br/>test_case\scg\scg_Acl\test_c143974.py:99: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;88b70ae224c5cff5435a56e6f0206fbd&quot;)&gt;<br/><br/>    def test_c143974(browser):<br/>    	try:<br/>    <br/>    		login_web(browser, url=dev1)<br/>    <br/>    		# 配路由使8283通<br/>    		# 82上添加经过81到83路由<br/>    		shell_82 = Shell_SSH()<br/>    		shell_82.connect(hostip=dev2)<br/>    		shell_82.execute(&quot;en&quot;)<br/>    		shell_82.execute(&quot;conf t&quot;)<br/>    		shell_82.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		shell_82.close()<br/>    <br/>    		# 83上添加经过81到82的路由<br/>    		shell_83 = Shell_SSH()<br/>    		shell_83.connect(hostip=dev3)<br/>    		shell_83.execute(&quot;en&quot;)<br/>    		shell_83.execute(&quot;conf t&quot;)<br/>    		shell_83.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		shell_83.close()<br/>    <br/>    		# 删除默认规则<br/>    		del_default_acl_group_lzy(browser)<br/>    		sleep(2)<br/>    		# 添加组，添加规则（mac非PC机的网卡mac地址）<br/>    		add_ipv4_aclgroup_lzy(browser, group_name=&#x27;lzy&#x27;)<br/>    		add_ipv4acl_lzy(browser, aclgroup_name=&#x27;lzy&#x27;, mac=&#x27;00:16:31:EE:03:22&#x27;)<br/>    		sleep(2)<br/>    <br/>    		# 登录83，看能否ping通82<br/>    		login_web(browser, url=dev3)<br/>    		sleep(1)<br/>    		info1 = diag_ping(browser, ipadd=&quot;12.1.1.2&quot;, interface=interface_name_2, timesleep=10)<br/>    		# print(info1)<br/>    		sleep(2)<br/>    <br/>    		# 登录81，mac为正确地址<br/>    		login_web(browser, url=dev1)<br/>    		edit_acl_rule_wxw(browser, aclgroup_name=&#x27;lzy&#x27;, source_zone_interface=&#x27;Z:any&#x27;,<br/>    						  mac=mac_dev2_interface_2, dest_zone_interface=&#x27;Z:any&#x27;)<br/>    <br/>    		# 登录83，看能否ping通82<br/>    		login_web(browser, url=dev3)<br/>    		sleep(1)<br/>    		info2 = diag_ping(browser, ipadd=&quot;12.1.1.2&quot;, interface=interface_name_2, timesleep=5)<br/>    		# print(info2)<br/>    		sleep(2)<br/>    <br/>    <br/>    		# 还原<br/>    		# 删ACL<br/>    		login_web(browser, url=dev1)<br/>    		del_all_acl_group_lzy(browser)<br/>    		sleep(2)<br/>    <br/>    		# 删82上路由<br/>    		shell_82 = Shell_SSH()<br/>    		shell_82.connect(hostip=dev2)<br/>    		shell_82.execute(&quot;en&quot;)<br/>    		shell_82.execute(&quot;conf t&quot;)<br/>    		shell_82.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		shell_82.close()<br/>    <br/>    <br/>    		# 删83上路由<br/>    		shell_83 = Shell_SSH()<br/>    		shell_83.connect(hostip=dev3)<br/>    		shell_83.execute(&quot;en&quot;)<br/>    		shell_83.execute(&quot;conf t&quot;)<br/>    		shell_83.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		shell_83.close()<br/>    <br/>    		try:<br/>    			assert &#x27;Destination Host Unreachable&#x27; in info1 and &#x27;ms&#x27; in info2<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>&gt;   			assert &#x27;Destination Host Unreachable&#x27; in info1 and &#x27;ms&#x27; in info2<br/><span class="error">E      AssertionError: assert (&#x27;Destination Host Unreachable&#x27; in &#x27;PING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\nPing 12.1.1.2 icmp_seq=2  Destination Host Unreachable\nPing 12.1.1.2 icmp_seq=3  Destination Host Unr&#x27; and &#x27;ms&#x27; in &#x27;PING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\nPing 12.1.1.2 icmp_seq=1  Destination Host Unr&#x27;)</span><br/><br/>test_case\scg\scg_Acl\test_c143974.py:104: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;88b70ae224c5cff5435a56e6f0206fbd&quot;)&gt;<br/><br/>    def test_c143974(browser):<br/>    	try:<br/>    <br/>    		login_web(browser, url=dev1)<br/>    <br/>    		# 配路由使8283通<br/>    		# 82上添加经过81到83路由<br/>    		shell_82 = Shell_SSH()<br/>    		shell_82.connect(hostip=dev2)<br/>    		shell_82.execute(&quot;en&quot;)<br/>    		shell_82.execute(&quot;conf t&quot;)<br/>    		shell_82.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		shell_82.close()<br/>    <br/>    		# 83上添加经过81到82的路由<br/>    		shell_83 = Shell_SSH()<br/>    		shell_83.connect(hostip=dev3)<br/>    		shell_83.execute(&quot;en&quot;)<br/>    		shell_83.execute(&quot;conf t&quot;)<br/>    		shell_83.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		shell_83.close()<br/>    <br/>    		# 删除默认规则<br/>    		del_default_acl_group_lzy(browser)<br/>    		sleep(2)<br/>    		# 添加组，添加规则（mac非PC机的网卡mac地址）<br/>    		add_ipv4_aclgroup_lzy(browser, group_name=&#x27;lzy&#x27;)<br/>    		add_ipv4acl_lzy(browser, aclgroup_name=&#x27;lzy&#x27;, mac=&#x27;00:16:31:EE:03:22&#x27;)<br/>    		sleep(2)<br/>    <br/>    		# 登录83，看能否ping通82<br/>    		login_web(browser, url=dev3)<br/>    		sleep(1)<br/>    		info1 = diag_ping(browser, ipadd=&quot;12.1.1.2&quot;, interface=interface_name_2, timesleep=10)<br/>    		# print(info1)<br/>    		sleep(2)<br/>    <br/>    		# 登录81，mac为正确地址<br/>    		login_web(browser, url=dev1)<br/>    		edit_acl_rule_wxw(browser, aclgroup_name=&#x27;lzy&#x27;, source_zone_interface=&#x27;Z:any&#x27;,<br/>    						  mac=mac_dev2_interface_2, dest_zone_interface=&#x27;Z:any&#x27;)<br/>    <br/>    		# 登录83，看能否ping通82<br/>    		login_web(browser, url=dev3)<br/>    		sleep(1)<br/>    		info2 = diag_ping(browser, ipadd=&quot;12.1.1.2&quot;, interface=interface_name_2, timesleep=5)<br/>    		# print(info2)<br/>    		sleep(2)<br/>    <br/>    <br/>    		# 还原<br/>    		# 删ACL<br/>    		login_web(browser, url=dev1)<br/>    		del_all_acl_group_lzy(browser)<br/>    		sleep(2)<br/>    <br/>    		# 删82上路由<br/>    		shell_82 = Shell_SSH()<br/>    		shell_82.connect(hostip=dev2)<br/>    		shell_82.execute(&quot;en&quot;)<br/>    		shell_82.execute(&quot;conf t&quot;)<br/>    		shell_82.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		shell_82.close()<br/>    <br/>    <br/>    		# 删83上路由<br/>    		shell_83 = Shell_SSH()<br/>    		shell_83.connect(hostip=dev3)<br/>    		shell_83.execute(&quot;en&quot;)<br/>    		shell_83.execute(&quot;conf t&quot;)<br/>    		shell_83.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		shell_83.close()<br/>    <br/>    		try:<br/>    			assert &#x27;Destination Host Unreachable&#x27; in info1 and &#x27;ms&#x27; in info2<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &#x27;Destination Host Unreachable&#x27; in info1 and &#x27;ms&#x27; in info2<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		reload(hostip=[dev1, dev2, dev3])<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_Acl\test_c143974.py:111: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-06 17:49:38.133892</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143978.py::test_c143978</td>
+          <td>None</td>
+          <td class="col-duration">275.51</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;88b70ae224c5cff5435a56e6f0206fbd&quot;)&gt;<br/><br/>    def test_c143978(browser):<br/>        try:<br/>            # 81的234接口添加子接口<br/>            login_web(browser, url=dev1)<br/>            delete_physical_interface_ip_wxw(browser, interface_name_2, &quot;12.1.1.1&quot;)<br/>            delete_physical_interface_ip_wxw(browser, interface_name_3, &quot;13.1.1.1&quot;)<br/>            delete_physical_interface_ip_wxw(browser, interface_name_4, &quot;20.1.1.1&quot;)<br/>            add_vlan_inte(browser, physicl_interface=interface_name_2, vlan_id=&quot;1&quot;, work_mode=&quot;route&quot;)<br/>            add_vlan_inte(browser, physicl_interface=interface_name_3, vlan_id=&quot;1&quot;, work_mode=&quot;route&quot;)<br/>            add_vlan_inte(browser, physicl_interface=interface_name_4, vlan_id=&quot;1&quot;, work_mode=&quot;route&quot;)<br/>            sleep(5)<br/>            add_vlan_inte_add(browser, interface_name_2+&#x27;.1&#x27;, &quot;12.1.1.1&quot;, &#x27;255.255.255.0&#x27;)<br/>            add_vlan_inte_add(browser, interface_name_3+&#x27;.1&#x27;, &quot;13.1.1.1&quot;, &#x27;255.255.255.0&#x27;)<br/>            add_vlan_inte_add(browser, interface_name_4+&#x27;.1&#x27;, &quot;20.1.1.1&quot;, &#x27;255.255.255.0&#x27;)<br/>            # 子接口转换模式<br/>            a = Shell_SSH()<br/>            a.connect(dev1)<br/>            a.execute(&quot;en&quot;)<br/>            a.execute(&quot;conf t&quot;)<br/>            a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>            a.execute(&quot;switchmode access&quot;)<br/>            a.execute(&quot;exit&quot;)<br/>            a.execute(&quot;interface gigabitethernet &quot; + interface_name_3)<br/>            a.execute(&quot;switchmode access&quot;)<br/>            a.execute(&quot;exit&quot;)<br/>            a.execute(&quot;interface gigabitethernet &quot; + interface_name_4)<br/>            a.execute(&quot;switchmode access&quot;)<br/>            a.execute(&quot;exit&quot;)<br/>    <br/>            # 添加zone1  包括三个子接口<br/>            add_obj_zone(browser, &quot;zone1&quot;, &quot;lzy&quot;, [interface_name_2+&quot;.1&quot;, interface_name_3+&quot;.1&quot;, interface_name_4+&quot;.1&quot;])<br/>            # 删除默认ACL<br/>            del_default_acl_group_lzy(browser)<br/>            # 添加ACL<br/>            add_acl_group_complete(browser, name=&#x27;lzy&#x27;, enable=&#x27;yes&#x27;)<br/>            add_acl_rule_complete_wxw(browser, aclgroup_name=&#x27;lzy&#x27;, source_zone_interface=&#x27;Z:zone1&#x27;,<br/>                                      dest_zone_interface=&#x27;Z:zone1&#x27;)<br/>            # 添加路由 82到83 82到10.1.1.202 经过81<br/>            shell_82 = Shell_SSH()<br/>            shell_82.connect(hostip=dev2)<br/>            shell_82.execute(&quot;en&quot;)<br/>            shell_82.execute(&quot;conf t&quot;)<br/>            shell_82.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>            shell_82.execute(&quot;ip route 20.1.1.0/24 gateway 12.1.1.1&quot;)<br/>            shell_82.close()<br/>            # 添加路由 83到82 83到10.1.1.202 经过81<br/>            shell_83 = Shell_SSH()<br/>            shell_83.connect(hostip=dev3)<br/>            shell_83.execute(&quot;en&quot;)<br/>            shell_83.execute(&quot;conf t&quot;)<br/>            shell_83.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>            shell_83.execute(&quot;ip route 20.1.1.0/24 gateway 13.1.1.1&quot;)<br/>            shell_83.close()<br/>            # 添加路由 10.1.1.202到82和83 经过81<br/>            ssh2 = SSH(&#x27;10.1.1.202&#x27;, &#x27;root&#x27;, &#x27;root&#x27;, 22)<br/>            ssh2.connect()<br/>            ssh2.execute(&#x27;route add -net 12.1.1.0/24 gw 20.1.1.1&#x27;)<br/>            ssh2.execute(&#x27;route add -net 13.1.1.0/24 gw 20.1.1.1&#x27;)<br/>            ssh2.execute(&#x27;ifconfig &#x27; + server_pc_2_eth1 + &#x27; 20.1.1.2 netmask 255.255.255.0&#x27;)<br/>            ssh2.close()<br/>    <br/>            # 用82ping83和10.1.1.202（地址应该填20.1.1.2）<br/>            login_web(browser, url=dev2)<br/>            sleep(1)<br/>            info1 = diag_ping(browser, ipadd=&quot;13.1.1.3&quot;, interface=interface_name_2)<br/>            # print(&quot;info1&quot;, info1)<br/>            sleep(2)<br/>            info2 = diag_ping(browser, ipadd=&quot;20.1.1.2&quot;, interface=interface_name_2)<br/>            # print(&quot;info2&quot;, info2)<br/>    <br/>            # 用83ping82和10.1.1.202（地址应该填20.1.1.2）<br/>            login_web(browser, url=dev3)<br/>            sleep(1)<br/>            info3 = diag_ping(browser, ipadd=&quot;12.1.1.2&quot;, interface=interface_name_2)<br/>            # print(&quot;info3&quot;, info3)<br/>            sleep(2)<br/>            info4 = diag_ping(browser, ipadd=&quot;20.1.1.2&quot;, interface=interface_name_2)<br/>            # print(&quot;info4&quot;, info4)<br/>    <br/>            # 用10.1.1.202ping82和83<br/>            ssh2 = SSH(&#x27;10.1.1.202&#x27;, &#x27;root&#x27;, &#x27;root&#x27;, 22)<br/>            ssh2.connect()<br/>            info5 = ssh2.execute(&#x27;ping 12.1.1.2 -c 5 -i 0.5&#x27;)<br/>            # print(info5)<br/>            info6 = ssh2.execute(&#x27;ping 13.1.1.3 -c 5 -i 0.5&#x27;)<br/>            # print(info6)<br/>            ssh2.close()<br/>    <br/>            # 还原<br/>            # 删除ACL<br/>            login_web(browser, url=dev1)<br/>            del_all_acl_group_wxw(browser)<br/>            # 删除zone1<br/>            del_obj_zone_byname(browser, &#x27;zone1&#x27;)<br/>    <br/>            # 删除子接口<br/>            del_vlan_inte_all(browser)<br/>            # 还原物理接口IP<br/>            add_physical_interface_ip_wxw(browser, interface=interface_name_2, ip=&#x27;12.1.1.1&#x27;, mask=&#x27;255.255.255.0&#x27;)<br/>            add_physical_interface_ip_wxw(browser, interface=interface_name_3, ip=&#x27;13.1.1.1&#x27;, mask=&#x27;255.255.255.0&#x27;)<br/>            add_physical_interface_ip_wxw(browser, interface=interface_name_4, ip=&#x27;20.1.1.1&#x27;, mask=&#x27;255.255.255.0&#x27;)<br/>    <br/>            # 删除路由#<br/>            # 删82上路由<br/>            shell_82 = Shell_SSH()<br/>            shell_82.connect(hostip=dev2)<br/>            shell_82.execute(&quot;en&quot;)<br/>            shell_82.execute(&quot;conf t&quot;)<br/>            shell_82.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>            shell_82.execute(&quot;no ip route 20.1.1.0/24 gateway 12.1.1.1&quot;)<br/>            shell_82.close()<br/>            # 删83上路由<br/>            shell_83 = Shell_SSH()<br/>            shell_83.connect(hostip=dev3)<br/>            shell_83.execute(&quot;en&quot;)<br/>            shell_83.execute(&quot;conf t&quot;)<br/>            shell_83.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>            shell_83.execute(&quot;no ip route 20.1.1.0/24 gateway 13.1.1.1&quot;)<br/>            shell_83.close()<br/>            # 删除10.1.1.202上路由<br/>            ssh2 = SSH(&#x27;10.1.1.202&#x27;, &#x27;root&#x27;, &#x27;root&#x27;, 22)<br/>            ssh2.connect()<br/>            ssh2.execute(&#x27;route del -net 13.1.1.0/24 gw 20.1.1.1&#x27;)<br/>            ssh2.execute(&#x27;route del -net 12.1.1.0/24 gw 20.1.1.1&#x27;)<br/>            ssh2.close()<br/>    <br/>            try:<br/>&gt;               assert &quot;ms&quot; in info1 and &quot;ms&quot; in info2 and &quot;ms&quot; in info3 and &quot;ms&quot; in info4 and &quot;ms&quot; in info5 and &quot;ms&quot; in info6<br/><span class="error">E               AssertionError: assert (&#x27;ms&#x27; in &#x27;PING 13.1.1.3 100 bytes of data 5 times(timeout is 2 seconds):\nPing 13.1.1.3 icmp_seq=1 time=4.07ms\nPing 13.1.1.3 icmp_seq=2 time&#x27; and &#x27;ms&#x27; in &#x27;PING 20.1.1.2 100 bytes of data 5 times(timeout is 2 se&#x27;)</span><br/><br/>test_case\scg\scg_Acl\test_c143978.py:157: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;88b70ae224c5cff5435a56e6f0206fbd&quot;)&gt;<br/><br/>    def test_c143978(browser):<br/>        try:<br/>            # 81的234接口添加子接口<br/>            login_web(browser, url=dev1)<br/>            delete_physical_interface_ip_wxw(browser, interface_name_2, &quot;12.1.1.1&quot;)<br/>            delete_physical_interface_ip_wxw(browser, interface_name_3, &quot;13.1.1.1&quot;)<br/>            delete_physical_interface_ip_wxw(browser, interface_name_4, &quot;20.1.1.1&quot;)<br/>            add_vlan_inte(browser, physicl_interface=interface_name_2, vlan_id=&quot;1&quot;, work_mode=&quot;route&quot;)<br/>            add_vlan_inte(browser, physicl_interface=interface_name_3, vlan_id=&quot;1&quot;, work_mode=&quot;route&quot;)<br/>            add_vlan_inte(browser, physicl_interface=interface_name_4, vlan_id=&quot;1&quot;, work_mode=&quot;route&quot;)<br/>            sleep(5)<br/>            add_vlan_inte_add(browser, interface_name_2+&#x27;.1&#x27;, &quot;12.1.1.1&quot;, &#x27;255.255.255.0&#x27;)<br/>            add_vlan_inte_add(browser, interface_name_3+&#x27;.1&#x27;, &quot;13.1.1.1&quot;, &#x27;255.255.255.0&#x27;)<br/>            add_vlan_inte_add(browser, interface_name_4+&#x27;.1&#x27;, &quot;20.1.1.1&quot;, &#x27;255.255.255.0&#x27;)<br/>            # 子接口转换模式<br/>            a = Shell_SSH()<br/>            a.connect(dev1)<br/>            a.execute(&quot;en&quot;)<br/>            a.execute(&quot;conf t&quot;)<br/>            a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>            a.execute(&quot;switchmode access&quot;)<br/>            a.execute(&quot;exit&quot;)<br/>            a.execute(&quot;interface gigabitethernet &quot; + interface_name_3)<br/>            a.execute(&quot;switchmode access&quot;)<br/>            a.execute(&quot;exit&quot;)<br/>            a.execute(&quot;interface gigabitethernet &quot; + interface_name_4)<br/>            a.execute(&quot;switchmode access&quot;)<br/>            a.execute(&quot;exit&quot;)<br/>    <br/>            # 添加zone1  包括三个子接口<br/>            add_obj_zone(browser, &quot;zone1&quot;, &quot;lzy&quot;, [interface_name_2+&quot;.1&quot;, interface_name_3+&quot;.1&quot;, interface_name_4+&quot;.1&quot;])<br/>            # 删除默认ACL<br/>            del_default_acl_group_lzy(browser)<br/>            # 添加ACL<br/>            add_acl_group_complete(browser, name=&#x27;lzy&#x27;, enable=&#x27;yes&#x27;)<br/>            add_acl_rule_complete_wxw(browser, aclgroup_name=&#x27;lzy&#x27;, source_zone_interface=&#x27;Z:zone1&#x27;,<br/>                                      dest_zone_interface=&#x27;Z:zone1&#x27;)<br/>            # 添加路由 82到83 82到10.1.1.202 经过81<br/>            shell_82 = Shell_SSH()<br/>            shell_82.connect(hostip=dev2)<br/>            shell_82.execute(&quot;en&quot;)<br/>            shell_82.execute(&quot;conf t&quot;)<br/>            shell_82.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>            shell_82.execute(&quot;ip route 20.1.1.0/24 gateway 12.1.1.1&quot;)<br/>            shell_82.close()<br/>            # 添加路由 83到82 83到10.1.1.202 经过81<br/>            shell_83 = Shell_SSH()<br/>            shell_83.connect(hostip=dev3)<br/>            shell_83.execute(&quot;en&quot;)<br/>            shell_83.execute(&quot;conf t&quot;)<br/>            shell_83.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>            shell_83.execute(&quot;ip route 20.1.1.0/24 gateway 13.1.1.1&quot;)<br/>            shell_83.close()<br/>            # 添加路由 10.1.1.202到82和83 经过81<br/>            ssh2 = SSH(&#x27;10.1.1.202&#x27;, &#x27;root&#x27;, &#x27;root&#x27;, 22)<br/>            ssh2.connect()<br/>            ssh2.execute(&#x27;route add -net 12.1.1.0/24 gw 20.1.1.1&#x27;)<br/>            ssh2.execute(&#x27;route add -net 13.1.1.0/24 gw 20.1.1.1&#x27;)<br/>            ssh2.execute(&#x27;ifconfig &#x27; + server_pc_2_eth1 + &#x27; 20.1.1.2 netmask 255.255.255.0&#x27;)<br/>            ssh2.close()<br/>    <br/>            # 用82ping83和10.1.1.202（地址应该填20.1.1.2）<br/>            login_web(browser, url=dev2)<br/>            sleep(1)<br/>            info1 = diag_ping(browser, ipadd=&quot;13.1.1.3&quot;, interface=interface_name_2)<br/>            # print(&quot;info1&quot;, info1)<br/>            sleep(2)<br/>            info2 = diag_ping(browser, ipadd=&quot;20.1.1.2&quot;, interface=interface_name_2)<br/>            # print(&quot;info2&quot;, info2)<br/>    <br/>            # 用83ping82和10.1.1.202（地址应该填20.1.1.2）<br/>            login_web(browser, url=dev3)<br/>            sleep(1)<br/>            info3 = diag_ping(browser, ipadd=&quot;12.1.1.2&quot;, interface=interface_name_2)<br/>            # print(&quot;info3&quot;, info3)<br/>            sleep(2)<br/>            info4 = diag_ping(browser, ipadd=&quot;20.1.1.2&quot;, interface=interface_name_2)<br/>            # print(&quot;info4&quot;, info4)<br/>    <br/>            # 用10.1.1.202ping82和83<br/>            ssh2 = SSH(&#x27;10.1.1.202&#x27;, &#x27;root&#x27;, &#x27;root&#x27;, 22)<br/>            ssh2.connect()<br/>            info5 = ssh2.execute(&#x27;ping 12.1.1.2 -c 5 -i 0.5&#x27;)<br/>            # print(info5)<br/>            info6 = ssh2.execute(&#x27;ping 13.1.1.3 -c 5 -i 0.5&#x27;)<br/>            # print(info6)<br/>            ssh2.close()<br/>    <br/>            # 还原<br/>            # 删除ACL<br/>            login_web(browser, url=dev1)<br/>            del_all_acl_group_wxw(browser)<br/>            # 删除zone1<br/>            del_obj_zone_byname(browser, &#x27;zone1&#x27;)<br/>    <br/>            # 删除子接口<br/>            del_vlan_inte_all(browser)<br/>            # 还原物理接口IP<br/>            add_physical_interface_ip_wxw(browser, interface=interface_name_2, ip=&#x27;12.1.1.1&#x27;, mask=&#x27;255.255.255.0&#x27;)<br/>            add_physical_interface_ip_wxw(browser, interface=interface_name_3, ip=&#x27;13.1.1.1&#x27;, mask=&#x27;255.255.255.0&#x27;)<br/>            add_physical_interface_ip_wxw(browser, interface=interface_name_4, ip=&#x27;20.1.1.1&#x27;, mask=&#x27;255.255.255.0&#x27;)<br/>    <br/>            # 删除路由#<br/>            # 删82上路由<br/>            shell_82 = Shell_SSH()<br/>            shell_82.connect(hostip=dev2)<br/>            shell_82.execute(&quot;en&quot;)<br/>            shell_82.execute(&quot;conf t&quot;)<br/>            shell_82.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>            shell_82.execute(&quot;no ip route 20.1.1.0/24 gateway 12.1.1.1&quot;)<br/>            shell_82.close()<br/>            # 删83上路由<br/>            shell_83 = Shell_SSH()<br/>            shell_83.connect(hostip=dev3)<br/>            shell_83.execute(&quot;en&quot;)<br/>            shell_83.execute(&quot;conf t&quot;)<br/>            shell_83.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>            shell_83.execute(&quot;no ip route 20.1.1.0/24 gateway 13.1.1.1&quot;)<br/>            shell_83.close()<br/>            # 删除10.1.1.202上路由<br/>            ssh2 = SSH(&#x27;10.1.1.202&#x27;, &#x27;root&#x27;, &#x27;root&#x27;, 22)<br/>            ssh2.connect()<br/>            ssh2.execute(&#x27;route del -net 13.1.1.0/24 gw 20.1.1.1&#x27;)<br/>            ssh2.execute(&#x27;route del -net 12.1.1.0/24 gw 20.1.1.1&#x27;)<br/>            ssh2.close()<br/>    <br/>            try:<br/>                assert &quot;ms&quot; in info1 and &quot;ms&quot; in info2 and &quot;ms&quot; in info3 and &quot;ms&quot; in info4 and &quot;ms&quot; in info5 and &quot;ms&quot; in info6<br/>                # assert &quot;ms&quot; in info1<br/>                # assert &quot;ms&quot; in info2<br/>                # assert &quot;ms&quot; in info3<br/>                # assert &quot;ms&quot; in info4<br/>                # assert &quot;ms&quot; in info5<br/>                # assert &quot;ms&quot; in info6<br/>                rail_pass(test_run_id, test_id)<br/>            except:<br/>                rail_fail(test_run_id, test_id)<br/>&gt;               assert &quot;ms&quot; in info1 and &quot;ms&quot; in info2 and &quot;ms&quot; in info3 and &quot;ms&quot; in info4 and &quot;ms&quot; in info5 and &quot;ms&quot; in info6<br/><span class="error">E               AssertionError: assert (&#x27;ms&#x27; in &#x27;PING 13.1.1.3 100 bytes of data 5 times(timeout is 2 seconds):\nPing 13.1.1.3 icmp_seq=1 time=4.07ms\nPing 13.1.1.3 icmp_seq=2 time&#x27; and &#x27;ms&#x27; in &#x27;PING 20.1.1.2 100 bytes of data 5 times(timeout is 2 se&#x27;)</span><br/><br/>test_case\scg\scg_Acl\test_c143978.py:167: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;88b70ae224c5cff5435a56e6f0206fbd&quot;)&gt;<br/><br/>    def test_c143978(browser):<br/>        try:<br/>            # 81的234接口添加子接口<br/>            login_web(browser, url=dev1)<br/>            delete_physical_interface_ip_wxw(browser, interface_name_2, &quot;12.1.1.1&quot;)<br/>            delete_physical_interface_ip_wxw(browser, interface_name_3, &quot;13.1.1.1&quot;)<br/>            delete_physical_interface_ip_wxw(browser, interface_name_4, &quot;20.1.1.1&quot;)<br/>            add_vlan_inte(browser, physicl_interface=interface_name_2, vlan_id=&quot;1&quot;, work_mode=&quot;route&quot;)<br/>            add_vlan_inte(browser, physicl_interface=interface_name_3, vlan_id=&quot;1&quot;, work_mode=&quot;route&quot;)<br/>            add_vlan_inte(browser, physicl_interface=interface_name_4, vlan_id=&quot;1&quot;, work_mode=&quot;route&quot;)<br/>            sleep(5)<br/>            add_vlan_inte_add(browser, interface_name_2+&#x27;.1&#x27;, &quot;12.1.1.1&quot;, &#x27;255.255.255.0&#x27;)<br/>            add_vlan_inte_add(browser, interface_name_3+&#x27;.1&#x27;, &quot;13.1.1.1&quot;, &#x27;255.255.255.0&#x27;)<br/>            add_vlan_inte_add(browser, interface_name_4+&#x27;.1&#x27;, &quot;20.1.1.1&quot;, &#x27;255.255.255.0&#x27;)<br/>            # 子接口转换模式<br/>            a = Shell_SSH()<br/>            a.connect(dev1)<br/>            a.execute(&quot;en&quot;)<br/>            a.execute(&quot;conf t&quot;)<br/>            a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>            a.execute(&quot;switchmode access&quot;)<br/>            a.execute(&quot;exit&quot;)<br/>            a.execute(&quot;interface gigabitethernet &quot; + interface_name_3)<br/>            a.execute(&quot;switchmode access&quot;)<br/>            a.execute(&quot;exit&quot;)<br/>            a.execute(&quot;interface gigabitethernet &quot; + interface_name_4)<br/>            a.execute(&quot;switchmode access&quot;)<br/>            a.execute(&quot;exit&quot;)<br/>    <br/>            # 添加zone1  包括三个子接口<br/>            add_obj_zone(browser, &quot;zone1&quot;, &quot;lzy&quot;, [interface_name_2+&quot;.1&quot;, interface_name_3+&quot;.1&quot;, interface_name_4+&quot;.1&quot;])<br/>            # 删除默认ACL<br/>            del_default_acl_group_lzy(browser)<br/>            # 添加ACL<br/>            add_acl_group_complete(browser, name=&#x27;lzy&#x27;, enable=&#x27;yes&#x27;)<br/>            add_acl_rule_complete_wxw(browser, aclgroup_name=&#x27;lzy&#x27;, source_zone_interface=&#x27;Z:zone1&#x27;,<br/>                                      dest_zone_interface=&#x27;Z:zone1&#x27;)<br/>            # 添加路由 82到83 82到10.1.1.202 经过81<br/>            shell_82 = Shell_SSH()<br/>            shell_82.connect(hostip=dev2)<br/>            shell_82.execute(&quot;en&quot;)<br/>            shell_82.execute(&quot;conf t&quot;)<br/>            shell_82.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>            shell_82.execute(&quot;ip route 20.1.1.0/24 gateway 12.1.1.1&quot;)<br/>            shell_82.close()<br/>            # 添加路由 83到82 83到10.1.1.202 经过81<br/>            shell_83 = Shell_SSH()<br/>            shell_83.connect(hostip=dev3)<br/>            shell_83.execute(&quot;en&quot;)<br/>            shell_83.execute(&quot;conf t&quot;)<br/>            shell_83.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>            shell_83.execute(&quot;ip route 20.1.1.0/24 gateway 13.1.1.1&quot;)<br/>            shell_83.close()<br/>            # 添加路由 10.1.1.202到82和83 经过81<br/>            ssh2 = SSH(&#x27;10.1.1.202&#x27;, &#x27;root&#x27;, &#x27;root&#x27;, 22)<br/>            ssh2.connect()<br/>            ssh2.execute(&#x27;route add -net 12.1.1.0/24 gw 20.1.1.1&#x27;)<br/>            ssh2.execute(&#x27;route add -net 13.1.1.0/24 gw 20.1.1.1&#x27;)<br/>            ssh2.execute(&#x27;ifconfig &#x27; + server_pc_2_eth1 + &#x27; 20.1.1.2 netmask 255.255.255.0&#x27;)<br/>            ssh2.close()<br/>    <br/>            # 用82ping83和10.1.1.202（地址应该填20.1.1.2）<br/>            login_web(browser, url=dev2)<br/>            sleep(1)<br/>            info1 = diag_ping(browser, ipadd=&quot;13.1.1.3&quot;, interface=interface_name_2)<br/>            # print(&quot;info1&quot;, info1)<br/>            sleep(2)<br/>            info2 = diag_ping(browser, ipadd=&quot;20.1.1.2&quot;, interface=interface_name_2)<br/>            # print(&quot;info2&quot;, info2)<br/>    <br/>            # 用83ping82和10.1.1.202（地址应该填20.1.1.2）<br/>            login_web(browser, url=dev3)<br/>            sleep(1)<br/>            info3 = diag_ping(browser, ipadd=&quot;12.1.1.2&quot;, interface=interface_name_2)<br/>            # print(&quot;info3&quot;, info3)<br/>            sleep(2)<br/>            info4 = diag_ping(browser, ipadd=&quot;20.1.1.2&quot;, interface=interface_name_2)<br/>            # print(&quot;info4&quot;, info4)<br/>    <br/>            # 用10.1.1.202ping82和83<br/>            ssh2 = SSH(&#x27;10.1.1.202&#x27;, &#x27;root&#x27;, &#x27;root&#x27;, 22)<br/>            ssh2.connect()<br/>            info5 = ssh2.execute(&#x27;ping 12.1.1.2 -c 5 -i 0.5&#x27;)<br/>            # print(info5)<br/>            info6 = ssh2.execute(&#x27;ping 13.1.1.3 -c 5 -i 0.5&#x27;)<br/>            # print(info6)<br/>            ssh2.close()<br/>    <br/>            # 还原<br/>            # 删除ACL<br/>            login_web(browser, url=dev1)<br/>            del_all_acl_group_wxw(browser)<br/>            # 删除zone1<br/>            del_obj_zone_byname(browser, &#x27;zone1&#x27;)<br/>    <br/>            # 删除子接口<br/>            del_vlan_inte_all(browser)<br/>            # 还原物理接口IP<br/>            add_physical_interface_ip_wxw(browser, interface=interface_name_2, ip=&#x27;12.1.1.1&#x27;, mask=&#x27;255.255.255.0&#x27;)<br/>            add_physical_interface_ip_wxw(browser, interface=interface_name_3, ip=&#x27;13.1.1.1&#x27;, mask=&#x27;255.255.255.0&#x27;)<br/>            add_physical_interface_ip_wxw(browser, interface=interface_name_4, ip=&#x27;20.1.1.1&#x27;, mask=&#x27;255.255.255.0&#x27;)<br/>    <br/>            # 删除路由#<br/>            # 删82上路由<br/>            shell_82 = Shell_SSH()<br/>            shell_82.connect(hostip=dev2)<br/>            shell_82.execute(&quot;en&quot;)<br/>            shell_82.execute(&quot;conf t&quot;)<br/>            shell_82.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>            shell_82.execute(&quot;no ip route 20.1.1.0/24 gateway 12.1.1.1&quot;)<br/>            shell_82.close()<br/>            # 删83上路由<br/>            shell_83 = Shell_SSH()<br/>            shell_83.connect(hostip=dev3)<br/>            shell_83.execute(&quot;en&quot;)<br/>            shell_83.execute(&quot;conf t&quot;)<br/>            shell_83.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>            shell_83.execute(&quot;no ip route 20.1.1.0/24 gateway 13.1.1.1&quot;)<br/>            shell_83.close()<br/>            # 删除10.1.1.202上路由<br/>            ssh2 = SSH(&#x27;10.1.1.202&#x27;, &#x27;root&#x27;, &#x27;root&#x27;, 22)<br/>            ssh2.connect()<br/>            ssh2.execute(&#x27;route del -net 13.1.1.0/24 gw 20.1.1.1&#x27;)<br/>            ssh2.execute(&#x27;route del -net 12.1.1.0/24 gw 20.1.1.1&#x27;)<br/>            ssh2.close()<br/>    <br/>            try:<br/>                assert &quot;ms&quot; in info1 and &quot;ms&quot; in info2 and &quot;ms&quot; in info3 and &quot;ms&quot; in info4 and &quot;ms&quot; in info5 and &quot;ms&quot; in info6<br/>                # assert &quot;ms&quot; in info1<br/>                # assert &quot;ms&quot; in info2<br/>                # assert &quot;ms&quot; in info3<br/>                # assert &quot;ms&quot; in info4<br/>                # assert &quot;ms&quot; in info5<br/>                # assert &quot;ms&quot; in info6<br/>                rail_pass(test_run_id, test_id)<br/>            except:<br/>                rail_fail(test_run_id, test_id)<br/>                assert &quot;ms&quot; in info1 and &quot;ms&quot; in info2 and &quot;ms&quot; in info3 and &quot;ms&quot; in info4 and &quot;ms&quot; in info5 and &quot;ms&quot; in info6<br/>                # assert &quot;ms&quot; in info1<br/>                # assert &quot;ms&quot; in info2<br/>                # assert &quot;ms&quot; in info3<br/>                # assert &quot;ms&quot; in info4<br/>                # assert &quot;ms&quot; in info5<br/>                # assert &quot;ms&quot; in info6<br/>        except Exception as err:<br/>            # 如果上面的步骤有报错，重新设备，恢复配置<br/>            reload(hostip=[dev1, dev2, dev3])<br/>            print(err)<br/>            rail_fail(test_run_id, test_id)<br/>&gt;           assert False<br/><span class="error">E           assert False</span><br/><br/>test_case\scg\scg_Acl\test_c143978.py:179: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 16:28:13.444504</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143914.py::test_c143914</td>
+          <td>None</td>
+          <td class="col-duration">32.49</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 16:28:41.600114</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143921.py::test_c143921</td>
+          <td>None</td>
+          <td class="col-duration">28.15</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 16:29:44.109689</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143923.py::test_c143923</td>
+          <td>None</td>
+          <td class="col-duration">62.51</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 16:33:10.359486</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143925.py::test_c143925</td>
+          <td>None</td>
+          <td class="col-duration">206.25</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 16:36:03.260376</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143926.py::test_c143926</td>
+          <td>None</td>
+          <td class="col-duration">172.90</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 16:58:00.044691</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143927.py::test_c143927</td>
+          <td>None</td>
+          <td class="col-duration">1316.78</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 16:59:52.319113</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143928.py::test_c143928</td>
+          <td>None</td>
+          <td class="col-duration">112.27</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:01:16.600934</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143929.py::test_c143929</td>
+          <td>None</td>
+          <td class="col-duration">84.28</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:02:59.318809</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143930.py::test_c143930</td>
+          <td>None</td>
+          <td class="col-duration">102.71</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:03:37.449990</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143931.py::test_c143931</td>
+          <td>None</td>
+          <td class="col-duration">38.13</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:04:54.115375</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143932.py::test_c143932</td>
+          <td>None</td>
+          <td class="col-duration">76.66</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:06:39.094379</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143934.py::test_c143934</td>
+          <td>None</td>
+          <td class="col-duration">104.98</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:08:34.734994</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143935.py::test_c143935</td>
+          <td>None</td>
+          <td class="col-duration">115.64</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:09:08.167906</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143940.py::test_c143940</td>
+          <td>None</td>
+          <td class="col-duration">33.43</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:10:16.052789</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143941.py::test_c143941</td>
+          <td>None</td>
+          <td class="col-duration">67.88</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:11:08.908812</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143950.py::test_c143950</td>
+          <td>None</td>
+          <td class="col-duration">52.85</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:11:57.633599</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143951.py::test_c143951</td>
+          <td>None</td>
+          <td class="col-duration">48.72</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:12:52.857757</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143952.py::test_c143952</td>
+          <td>None</td>
+          <td class="col-duration">55.22</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:13:47.842902</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143953.py::test_c143953</td>
+          <td>None</td>
+          <td class="col-duration">54.98</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:14:43.705098</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143954.py::test_c143954</td>
+          <td>None</td>
+          <td class="col-duration">55.86</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:15:40.028319</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143955.py::test_c143955</td>
+          <td>None</td>
+          <td class="col-duration">56.32</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:16:58.282795</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143956.py::test_c143956</td>
+          <td>None</td>
+          <td class="col-duration">78.25</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:17:24.610301</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143961.py::test_c143961</td>
+          <td>None</td>
+          <td class="col-duration">26.32</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:18:21.719567</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143962.py::test_c143962</td>
+          <td>None</td>
+          <td class="col-duration">57.10</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:20:37.191316</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143963.py::test_c143963</td>
+          <td>None</td>
+          <td class="col-duration">135.47</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:22:14.772897</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143964.py::test_c143964</td>
+          <td>None</td>
+          <td class="col-duration">97.58</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:23:58.086806</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143965.py::test_c143965</td>
+          <td>None</td>
+          <td class="col-duration">103.31</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:26:14.788625</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143966.py::test_c143966</td>
+          <td>None</td>
+          <td class="col-duration">136.70</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:27:46.404865</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143967.py::test_c143967</td>
+          <td>None</td>
+          <td class="col-duration">91.61</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:29:35.581110</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143968.py::test_c143968</td>
+          <td>None</td>
+          <td class="col-duration">109.17</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:31:19.685064</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143969.py::test_c143969</td>
+          <td>None</td>
+          <td class="col-duration">104.10</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:33:38.151984</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143970.py::test_c143970</td>
+          <td>None</td>
+          <td class="col-duration">138.46</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:34:57.178504</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143971.py::test_c143971</td>
+          <td>None</td>
+          <td class="col-duration">79.02</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:37:12.132223</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143972.py::test_c143972</td>
+          <td>None</td>
+          <td class="col-duration">134.95</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:38:23.098282</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143973.py::test_c143973</td>
+          <td>None</td>
+          <td class="col-duration">70.96</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:52:33.641930</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143978.py::test_c143978</td>
+          <td>None</td>
+          <td class="col-duration">175.51</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:55:03.479501</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143979.py::test_c143979</td>
+          <td>None</td>
+          <td class="col-duration">149.83</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 17:57:34.018111</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143980.py::test_c143980</td>
+          <td>None</td>
+          <td class="col-duration">150.54</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:00:43.026922</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143981.py::test_c143981</td>
+          <td>None</td>
+          <td class="col-duration">189.01</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:02:22.135590</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143982.py::test_c143982</td>
+          <td>None</td>
+          <td class="col-duration">99.10</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:04:55.072338</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c143985.py::test_c143985</td>
+          <td>None</td>
+          <td class="col-duration">152.93</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:07:24.521886</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144000.py::test_c144000</td>
+          <td>None</td>
+          <td class="col-duration">149.45</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:09:19.561466</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144001.py::test_c144001</td>
+          <td>None</td>
+          <td class="col-duration">115.04</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:11:10.705823</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144004.py::test_c144004</td>
+          <td>None</td>
+          <td class="col-duration">111.14</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:12:59.424041</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144009.py::test_c144009</td>
+          <td>None</td>
+          <td class="col-duration">108.72</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:15:07.414362</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144040.py::test_c144040</td>
+          <td>None</td>
+          <td class="col-duration">127.99</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:17:18.958886</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144047.py::test_c144047</td>
+          <td>None</td>
+          <td class="col-duration">131.54</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:19:36.644761</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144054.py::test_c144054</td>
+          <td>None</td>
+          <td class="col-duration">137.68</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:21:05.973870</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144062.py::test_c144062</td>
+          <td>None</td>
+          <td class="col-duration">89.29</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:21:15.902438</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144097.py::test_c144097</td>
+          <td>None</td>
+          <td class="col-duration">9.92</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:21:42.843979</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144099.py::test_c144099</td>
+          <td>None</td>
+          <td class="col-duration">26.94</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:22:05.609281</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144100.py::test_c144100</td>
+          <td>None</td>
+          <td class="col-duration">22.76</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:22:27.274520</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144101.py::test_c144101</td>
+          <td>None</td>
+          <td class="col-duration">21.66</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:22:48.842754</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144102.py::test_c144102</td>
+          <td>None</td>
+          <td class="col-duration">21.57</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:23:10.760008</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144103.py::test_c144103</td>
+          <td>None</td>
+          <td class="col-duration">21.91</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:23:45.441991</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144107.py::test_c144107</td>
+          <td>None</td>
+          <td class="col-duration">34.68</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:24:11.700493</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144110.py::test_c144110</td>
+          <td>None</td>
+          <td class="col-duration">26.25</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:24:35.350846</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144111.py::test_c144111</td>
+          <td>None</td>
+          <td class="col-duration">23.65</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:24:56.571060</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144112.py::test_c144112</td>
+          <td>None</td>
+          <td class="col-duration">21.22</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:25:20.987456</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c144113.py::test_c144113</td>
+          <td>None</td>
+          <td class="col-duration">24.41</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:26:02.486830</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c147601.py::test_c147601</td>
+          <td>None</td>
+          <td class="col-duration">41.50</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-06 18:26:46.437344</td>
+          <td class="col-name">test_case/scg/scg_Acl/test_c147602.py::test_c147602</td>
+          <td>None</td>
+          <td class="col-duration">41.17</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>

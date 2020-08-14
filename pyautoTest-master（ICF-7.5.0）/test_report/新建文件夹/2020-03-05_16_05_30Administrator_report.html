@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <style>body {
+	font-family: Helvetica, Arial, sans-serif;
+	font-size: 12px;
+	min-width: 1200px;
+	color: #999;
+}
+
+h1 {
+	font-size: 24px;
+	color: black;
+}
+
+h2 {
+	font-size: 16px;
+	color: black;
+}
+
+p {
+    color: black;
+}
+
+a {
+	color: #999;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+
+#environment td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+}
+
+#environment tr:nth-child(odd) {
+	background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed, .passed .col-result {
+	color: green;
+}
+span.skipped, span.xfailed, span.rerun, .skipped .col-result, .xfailed .col-result, .rerun .col-result {
+	color: orange;
+}
+span.error, span.failed, span.xpassed, .error .col-result, .failed .col-result, .xpassed .col-result  {
+	color: red;
+}
+
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+
+#results-table {
+	border: 1px solid #e6e6e6;
+	color: #999;
+	font-size: 12px;
+	width: 100%
+}
+
+#results-table th, #results-table td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+	text-align: left
+}
+#results-table th {
+	font-weight: bold
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+
+.log:only-child {
+	height: inherit
+}
+.log {
+	background-color: #e6e6e6;
+	border: 1px solid #e6e6e6;
+	color: black;
+	display: block;
+	font-family: "Courier New", Courier, monospace;
+	height: 230px;
+	overflow-y: scroll;
+	padding: 5px;
+	white-space: pre-wrap
+}
+div.image {
+	border: 1px solid #e6e6e6;
+	float: right;
+	height: 240px;
+	margin-left: 5px;
+	overflow: hidden;
+	width: 320px
+}
+div.image img {
+	width: 320px
+}
+.collapsed {
+	display: none;
+}
+.expander::after {
+	content: " (show details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+.collapser::after {
+	content: " (hide details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+	cursor: pointer;
+}
+
+.sort-icon {
+	font-size: 0px;
+	float: left;
+	margin-right: 5px;
+	margin-top: 5px;
+	/*triangle*/
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+}
+
+.inactive .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #E6E6E6;
+}
+
+.asc.active .sort-icon {
+	/*finish triangle*/
+	border-bottom: 8px solid #999;
+}
+
+.desc.active .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>2020-03-05_16_05_30Administrator_report.html</h1>
+    <p>Report generated on 05-Mar-2020 at 17:53:40 by<a href="https://pypi.python.org/pypi/pytest-html"> pytest-html</a> v1.19.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;3.6.3&apos;, &apos;py&apos;: &apos;1.8.0&apos;, &apos;pluggy&apos;: &apos;0.6.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-7-6.1.7601-SP1</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;rerunfailures&apos;: &apos;4.1&apos;, &apos;metadata&apos;: &apos;1.8.0&apos;, &apos;html&apos;: &apos;1.19.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.0</td></tr></table>
+    <h2>Summary</h2>
+    <p>87 tests ran in 6490.42 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">85 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">2 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">4 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable time" col="time">Time</th>
+          <th class="sortable" col="name">Test</th>
+          <th>Description</th>
+          <th class="sortable numeric" col="duration">Duration</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="5">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-time">2020-03-05 09:18:47.849999</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139373.py::test_c139373</td>
+          <td>None</td>
+          <td class="col-duration">112.33</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/><br/>    def test_c139373(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		sleep(2)<br/>    		add_admin_profile(browser, profile_name=&#x27;lzy&#x27;)<br/>    		add_admin(browser, admin_name=&#x27;lzy&#x27;, temp=&#x27;lzy&#x27;)<br/>    		sys_set_lzy(browser, ssh_port=&quot;22&quot;, ssh_timeout=&quot;300&quot;, https_port=&quot;500&quot;, https_timeout=&quot;300&quot;, telent_port=&quot;23&quot;,<br/>&gt;   					telent_timeout=&quot;300&quot;, console_timeout=&quot;300&quot;)<br/><br/>test_case\scg\scg_Administrator\test_c139373.py:25: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/>ssh_port = &#x27;22&#x27;, ssh_timeout = &#x27;300&#x27;, https_port = &#x27;500&#x27;, https_timeout = &#x27;300&#x27;<br/>telent_port = &#x27;23&#x27;, telent_timeout = &#x27;300&#x27;, console_timeout = &#x27;300&#x27;<br/>frozen_time = &#x27;600&#x27;, expire_time = &#x27;600&#x27;, retry = &#x27;3&#x27;<br/><br/>    def sys_set_lzy(browser, ssh_port=&quot;22&quot;, ssh_timeout=&quot;600&quot;, https_port=&quot;443&quot;, https_timeout=&quot;600&quot;, telent_port=&quot;23&quot;,<br/>                    telent_timeout=&quot;600&quot;, console_timeout=&quot;600&quot;, frozen_time=&quot;600&quot;, expire_time=&quot;600&quot;, retry=&quot;3&quot;):<br/>    	# 定位到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# browser.switch_to.frame(&quot;lefttree&quot;)<br/>    	# # 点击系统<br/>    	# browser.find_element_by_xpath(系统).click()<br/>    	# if not browser.find_element_by_xpath(&#x27;//*[@id=&quot;menu&quot;]/div[1]/div/ul/li[2]&#x27;).is_displayed():<br/>    	# 	# 如果不可见，点击加号，展开元素<br/>    	# 	browser.find_element_by_xpath(系统管理).click()<br/>    	# # 点击物理接口<br/>    	# browser.find_element_by_xpath(管理员).click()<br/>    	# # 定位到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# # 定位到内容frame<br/>    	# browser.switch_to.frame(&quot;content&quot;)<br/>    	into_fun(browser, 管理员)<br/>    	# 点击系统设定<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;tabs&quot;]/li[3]/a/span&#x27;).click()<br/>    	time.sleep(3)<br/>    	# ssh设置<br/>    	# 清除默认输入内容<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;sshport&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;sshport&quot;]&#x27;).send_keys(ssh_port)<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;sshtimeout&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;sshtimeout&quot;]&#x27;).send_keys(ssh_timeout)<br/>    	# print(&quot;5612&quot;)<br/>    	sleep(2)<br/>    <br/>    	# https设置<br/>    	# 清除默认输入内容<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;httpsport&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;httpsport&quot;]&#x27;).send_keys(https_port)<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;httpstimeout&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;httpstimeout&quot;]&#x27;).send_keys(https_timeout)<br/>    <br/>    	# telent设置<br/>    	# 清除默认输入内容<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;telnetport&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;telnetport&quot;]&#x27;).send_keys(telent_port)<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;telnettimeout&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;telnettimeout&quot;]&#x27;).send_keys(telent_timeout)<br/>    <br/>    	# console设置<br/>    	# 清除默认输入内容<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;consoletimeout&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;consoletimeout&quot;]&#x27;).send_keys(console_timeout)<br/>    <br/>    	# frozen_time设置<br/>    	# 清除默认输入内容<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;fronzedtime&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;fronzedtime&quot;]&#x27;).send_keys(frozen_time)<br/>    <br/>    	# expire_time设置<br/>    	# 清除默认输入内容<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;expire_time&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;expire_time&quot;]&#x27;).send_keys(expire_time)<br/>    <br/>    	# retry设置<br/>    	# 清除默认输入内容<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;retry&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;retry&quot;]&#x27;).send_keys(retry)<br/>    	# 点击保存<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;container&quot;]/div[2]/form/div[2]/div[2]/div/input[2]&#x27;).click()<br/>    	time.sleep(3)<br/>    <br/>    	if https_port != &quot;443&quot; and https_port &gt;= &#x27;1&#x27; and https_port &lt;= &#x27;65535&#x27;:<br/>    		# 接受告警<br/>    		browser.switch_to_alert().accept()<br/>    		time.sleep(2)<br/>    		browser.refresh()<br/>    		time.sleep(2)<br/>    		x = https_port<br/>&gt;   		login_web(browser, url=&quot;10.2.2.81:&quot; + str(x))<br/><span class="error">E     NameError: name &#x27;login_web&#x27; is not defined</span><br/><br/>page_obj\scg\scg_def_sys.py:245: NameError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/><br/>    def test_c139373(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		sleep(2)<br/>    		add_admin_profile(browser, profile_name=&#x27;lzy&#x27;)<br/>    		add_admin(browser, admin_name=&#x27;lzy&#x27;, temp=&#x27;lzy&#x27;)<br/>    		sys_set_lzy(browser, ssh_port=&quot;22&quot;, ssh_timeout=&quot;300&quot;, https_port=&quot;500&quot;, https_timeout=&quot;300&quot;, telent_port=&quot;23&quot;,<br/>    					telent_timeout=&quot;300&quot;, console_timeout=&quot;300&quot;)<br/>    <br/>    		time.sleep(2)<br/>    		refresh(browser)<br/>    		login_web(browser, url=dev1)<br/>    		sleep(2)<br/>    		sign_out_jyl(browser)<br/>    		sleep(2)<br/>    		login_web(browser, url=dev1, username=&#x27;lzy&#x27;)<br/>    		time.sleep(2)<br/>    		refresh(browser)<br/>    		time.sleep(2)<br/>    		log1 = get_log(browser, 系统日志)<br/>    		# print(log1)<br/>    <br/>    		sleep(2)<br/>    		sign_out_jyl(browser)<br/>    		sleep(2)<br/>    		login_web(browser, url=dev1)<br/>    		delete_all_admin_list_jyl(browser)<br/>    		delete_all_admin_profile_jyl(browser)<br/>    <br/>    		try:<br/>    			assert &#x27;管理员登录成功&#x27; in log1<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &#x27;管理员登录成功&#x27; in log1<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_Administrator\test_c139373.py:58: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-time">2020-03-05 09:52:05.483257</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139452.py::test_c139452</td>
+          <td>None</td>
+          <td class="col-duration">109.67</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/><br/>    def test_c139452(browser):<br/>    	try:<br/>    		# 登录<br/>    		login_web(browser, url=dev1)<br/>    		s = get_admin_list_look_online_admin(browser)<br/>    		while s &lt; 5:<br/>    			a2 = Shell_SSH()<br/>    			a2.connect(dev1)<br/>    			s = get_admin_list_look_online_admin(browser)<br/>    		# login_web(browser, url=dev1, new=&quot;yes&quot;)<br/>    		# 添加admin user，输入name为root<br/>    		edit_admin_jyl(browser, edit_admin_name=&quot;admin&quot;, interface=&quot;any&quot;, online_num=&quot;5&quot;)<br/>    		a4 = Shell_SSH()<br/>    		a4.connect(dev1)<br/>&gt;   		online_num = get_admin_list_look_online_admin(browser)<br/><br/>test_case\scg\scg_Administrator\test_c139452.py:32: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/><br/>    def get_admin_list_look_online_admin(browser):<br/>    	browser.refresh()<br/>    	# 切换到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# # 切换到左侧frame<br/>    	# browser.switch_to.frame(&quot;lefttree&quot;)<br/>    	# # 点击系统<br/>    	# browser.find_element_by_xpath(系统).click()<br/>    	# # 判断菜单是否展开，元素是否可见<br/>    	# if not browser.find_element_by_xpath(display_系统管理).is_displayed():<br/>    	# 	# 如果不可见，点击加号，展开元素<br/>    	# 	browser.find_element_by_xpath(系统管理).click()<br/>    	# browser.find_element_by_xpath(管理员).click()<br/>    	# # 定位到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# # 定位到内容frame<br/>    	# browser.switch_to.frame(&quot;content&quot;)<br/>&gt;   	into_fun(browser, 管理员)<br/><br/>page_obj\scg\scg_def_sys.py:1279: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/>menu = &#x27;sys_administrators&#x27;<br/><br/>    def into_fun(browser, menu):<br/>    	if oem_name == &quot;ICF&quot;:<br/>    <br/>    		# print(&quot;进入ICF导航&quot;)<br/>    		try:<br/>    			# print(&quot;Alert exists&quot;)<br/>    			alert_info = &quot;init&quot;<br/>    			while alert_info is not None:<br/>    				alert = browser.switch_to_alert()<br/>    				alert_info = alert.text<br/>    				print(alert_info)<br/>    				alert.accept()<br/>    		except:<br/>    			# print(&quot;无警告，点击返回&quot;)<br/>    			try:<br/>    				browser.find_element_by_xpath(&#x27;// *[ @ id = &quot;link_but&quot;]&#x27;).click()<br/>    			except:<br/>    				# print(&quot;无点击返回&quot;)<br/>    				pass<br/>    		browser.switch_to.default_content()<br/>    		# 定位到左侧frame<br/>    		browser.switch_to.frame(&quot;lefttree&quot;)<br/>    <br/>    		if menu in [系统状态, 管理员, 系统升级, Web证书, 重启系统, 系统信息, 时间设定, DNS,<br/>    		            配置文件, 高可用性, SNMP设置, SNMP_Trap, 网络诊断, 服务器诊断]:<br/>    			browser.find_element_by_name(系统).click()<br/>    			if menu == 系统状态:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [管理员, 系统升级, Web证书, 重启系统]:<br/>    				if not browser.find_element_by_xpath(display_系统管理).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(系统管理).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [系统信息,  时间设定, DNS, 配置文件, 高可用性, SNMP设置, SNMP_Trap]:<br/>    				if not browser.find_element_by_xpath(display_配置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(配置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [网络诊断, 服务器诊断]:<br/>    				if not browser.find_element_by_xpath(display_诊断工具).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(诊断工具).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [物理接口, 子接口, 网桥, 静态路由, 策略路由, OSPF, ISP自动选择, 多网关组, 路由监控, DHCP设定, DHCP租用列表,<br/>    		              ARP列表, 桥MAC表, IPv6邻居列表, IPv6隧道]:<br/>    			browser.find_element_by_name(网络).click()<br/>    			if menu in [物理接口, 子接口, 网桥]:<br/>    				if not browser.find_element_by_xpath(display_接口设置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(接口设置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [静态路由, 策略路由, OSPF, ISP自动选择, 多网关组, 路由监控]:<br/>    				if not browser.find_element_by_xpath(display_路由).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(路由).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [DHCP设定, DHCP租用列表]:<br/>    				if not browser.find_element_by_xpath(display_DHCP).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(DHCP).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [ARP列表, 桥MAC表, IPv6邻居列表, IPv6隧道]:<br/>    				if not browser.find_element_by_xpath(display_MAC).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(MAC).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [模式切换, 自定义规则, 机器学习, 安全事件, 工业漏洞, ARP防护, 访问策略, IPV6访问策略, 地址, 地址范围,<br/>    		              地址组, IPv6地址, IPv6地址范围, IPv6地址组, 计划任务, 区域, 预定义服务, 自定义服务, 服务组, 目标地址转换,<br/>    		              源地址转换, 负载均衡]:<br/>    			browser.find_element_by_name(安全策略).click()<br/>    			if menu in [模式切换, 自定义规则, 机器学习, 安全事件, 工业漏洞, ARP防护, 访问策略, IPV6访问策略]:<br/>    				if not browser.find_element_by_xpath(display_工业防护策略).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(工业防护策略).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [地址, 地址范围, 地址组, IPv6地址, IPv6地址范围, IPv6地址组, 计划任务, 区域, 预定义服务, 自定义服务,<br/>    			              服务组]:<br/>    				if not browser.find_element_by_xpath(display_对象).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(对象).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [目标地址转换, 源地址转换, 负载均衡]:<br/>    				if not browser.find_element_by_xpath(display_地址转换).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(地址转换).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [主机标识, 应用加密, 手动密钥, 远程网关, 远程访问, 监控, CA证书]:<br/>    			browser.find_element_by_name(虚拟专网).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [Anti_DDoS设置, Anti_DDoS用户配置, Anti_DDoS规则列表, Anti_DDoS黑_白名单]:<br/>    			browser.find_element_by_name(DDoS防护).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [用户配置, 本地用户, 认证组, 认证服务器, 认证用户设置, 认证监控]:<br/>    			browser.find_element_by_name(认证用户).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [日志统计, 日志服务器, 日志过滤, 日志格式, 日志告警, 管理日志, 系统日志, 安全日志, 流量日志]:<br/>    			browser.find_element_by_name(日志).click()<br/>    			if menu == 日志统计:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [日志服务器, 日志过滤, 日志格式, 日志告警]:<br/>    				if not browser.find_element_by_xpath(display_日志设置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(日志设置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [管理日志, 系统日志, 安全日志, 流量日志]:<br/>    				if not browser.find_element_by_xpath(display_日志记录).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(日志记录).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    				time.sleep(2)<br/>    <br/>    		elif menu in [报表设置, 接口统计报表, 流量排行报表, 会话监控报表, 系统状态报表, 事件统计报表, 会话表, Anti_DDoS会话数,<br/>    		              Anti_DDoS会话速率, Anti_DDoS数据包速率, Top_N, 来源IP统计]:<br/>    			browser.find_element_by_name(报表).click()<br/>    			if menu in [报表设置, 接口统计报表, 流量排行报表, 会话监控报表, 系统状态报表, 事件统计报表, 会话表]:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [Anti_DDoS会话数, Anti_DDoS会话速率, Anti_DDoS数据包速率, Top_N, 来源IP统计]:<br/>    				if not browser.find_element_by_xpath(display_DDoS防护).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(DDoS防护).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		else:<br/>    			print(&quot;导航菜单未知，请检查是否输入错误，或切换函数。&quot;)<br/>    <br/>    		browser.switch_to.default_content()<br/>    		# 定位到内容frame<br/>    		time.sleep(1)<br/>    		try:<br/>    			time.sleep(1)<br/>    			browser.switch_to.frame(&quot;content&quot;)<br/>    		except Exception as err:<br/>    			print(err)<br/>    			print(&quot;导航处进入，没有找到frame&quot;)<br/>    <br/>    	elif oem_name == &quot;SCG&quot; or oem_name == &quot;万兆测试&quot;:<br/>    		# print(&quot;进入SCG导航&quot;)<br/>    		# 有时间界面会出现告警，需要将告警信息print出来<br/>    		try:<br/>    			# print(&quot;Alert exists&quot;)<br/>    			alert = browser.switch_to_alert()<br/>    			print(alert.text)<br/>    			alert.accept()<br/>    		except Exception as err1:<br/>    			# print(&quot;无警告，点击返回&quot;)<br/>    			# print(err1)<br/>    			# print(&#x27;文件&#x27;, err1.__traceback__.tb_frame.f_globals[&#x27;__file__&#x27;])<br/>    			# print(&#x27;行号&#x27;, err1.__traceback__.tb_lineno)<br/>    			pass<br/>    			try:<br/>    				browser.find_element_by_xpath(&#x27;// *[ @ id = &quot;link_but&quot;]&#x27;).click()<br/>    			except:<br/>    				# print(&quot;无点击返回&quot;)<br/>    				pass<br/>    		# browser.refresh()<br/>    		browser.switch_to.default_content()<br/>    		# 定位到左侧frame<br/>    		time.sleep(1)<br/>&gt;   		browser.switch_to.frame(&quot;lefttree&quot;)<br/><br/>page_obj\common\my_selenium.py:243: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.switch_to.SwitchTo object at 0x000000000615C940&gt;<br/>frame_reference = &#x27;lefttree&#x27;<br/><br/>    def frame(self, frame_reference):<br/>        &quot;&quot;&quot;<br/>            Switches focus to the specified frame, by index, name, or webelement.<br/>    <br/>            :Args:<br/>             - frame_reference: The name of the window to switch to, an integer representing the index,<br/>                                or a webelement that is an (i)frame to switch to.<br/>    <br/>            :Usage:<br/>                driver.switch_to.frame(&#x27;frame_name&#x27;)<br/>                driver.switch_to.frame(1)<br/>                driver.switch_to.frame(driver.find_elements_by_tag_name(&quot;iframe&quot;)[0])<br/>            &quot;&quot;&quot;<br/>        if isinstance(frame_reference, basestring) and self._driver.w3c:<br/>            try:<br/>                frame_reference = self._driver.find_element(By.ID, frame_reference)<br/>            except NoSuchElementException:<br/>                try:<br/>                    frame_reference = self._driver.find_element(By.NAME, frame_reference)<br/>                except NoSuchElementException:<br/>                    raise NoSuchFrameException(frame_reference)<br/>    <br/>&gt;       self._driver.execute(Command.SWITCH_TO_FRAME, {&#x27;id&#x27;: frame_reference})<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\switch_to.py:89: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/>driver_command = &#x27;switchToFrame&#x27;<br/>params = {&#x27;id&#x27;: &#x27;lefttree&#x27;, &#x27;sessionId&#x27;: &#x27;92ed6277350a09d7b48b9fb0295fc281&#x27;}<br/><br/>    def execute(self, driver_command, params=None):<br/>        &quot;&quot;&quot;<br/>            Sends a command to be executed by a command.CommandExecutor.<br/>    <br/>            :Args:<br/>             - driver_command: The name of the command to execute as a string.<br/>             - params: A dictionary of named parameters to send with the command.<br/>    <br/>            :Returns:<br/>              The command&#x27;s JSON response loaded into a dictionary object.<br/>            &quot;&quot;&quot;<br/>        if self.session_id is not None:<br/>            if not params:<br/>                params = {&#x27;sessionId&#x27;: self.session_id}<br/>            elif &#x27;sessionId&#x27; not in params:<br/>                params[&#x27;sessionId&#x27;] = self.session_id<br/>    <br/>        params = self._wrap_value(params)<br/>        response = self.command_executor.execute(driver_command, params)<br/>        if response:<br/>&gt;           self.error_handler.check_response(response)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:320: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x00000000067C16D8&gt;<br/>response = {&#x27;sessionId&#x27;: &#x27;92ed6277350a09d7b48b9fb0295fc281&#x27;, &#x27;status&#x27;: 8, &#x27;value&#x27;: {&#x27;message&#x27;: &#x27;no such frame\n  (Session info: c...r info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)&#x27;}}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>            Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>            :Args:<br/>             - response - The JSON response from the WebDriver server as a dictionary<br/>               object.<br/>    <br/>            :Raises: If the response contains an error message.<br/>            &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchFrameException: Message: no such frame</span><br/><span class="error">E         (Session info: chrome=80.0.3987.122)</span><br/><span class="error">E         (Driver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)</span><br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\errorhandler.py:242: NoSuchFrameException<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/><br/>    def test_c139452(browser):<br/>    	try:<br/>    		# 登录<br/>    		login_web(browser, url=dev1)<br/>    		s = get_admin_list_look_online_admin(browser)<br/>    		while s &lt; 5:<br/>    			a2 = Shell_SSH()<br/>    			a2.connect(dev1)<br/>    			s = get_admin_list_look_online_admin(browser)<br/>    		# login_web(browser, url=dev1, new=&quot;yes&quot;)<br/>    		# 添加admin user，输入name为root<br/>    		edit_admin_jyl(browser, edit_admin_name=&quot;admin&quot;, interface=&quot;any&quot;, online_num=&quot;5&quot;)<br/>    		a4 = Shell_SSH()<br/>    		a4.connect(dev1)<br/>    		online_num = get_admin_list_look_online_admin(browser)<br/>    		info1 = &quot;&quot;<br/>    		if online_num == 5:<br/>    			info1 = get_admin_list_look_online_admin(browser)<br/>    			# print(info1)<br/>    <br/>    		try:<br/>    			assert info1 == 5<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert info1 == 5<br/>    		edit_admin_jyl(browser, edit_admin_name=&quot;admin&quot;, interface=&quot;any&quot;, online_num=&quot;32&quot;)<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_Administrator\test_c139452.py:52: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-05 08:59:38.509260</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139359.py::test_c139359</td>
+          <td>None</td>
+          <td class="col-duration">83.18</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/><br/>    def test_c139359(browser):<br/>    	try:<br/>    		# 登录函数<br/>    		login_web(browser, url=dev1)<br/>    		add_admin(browser,<br/>    	              admin_name=&quot;bob&quot;, auth_database=&quot;local&quot;,<br/>    	              temp=&quot;log_profile&quot;,<br/>    	              https=&quot;yes&quot;, telent=&quot;yes&quot;, ssh=&quot;yes&quot;, console=&quot;yes&quot;,<br/>    	              password=&quot;admin@139&quot;, confirm_password=&quot;admin@139&quot;,<br/>&gt;   	              status=&quot;enable&quot;, interface=interface_name_1, online_num=&quot;32&quot;, ip1=&quot;0.0.0.0/0&quot;)<br/><br/>test_case\scg\scg_Administrator\test_c139359.py:28: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/>admin_name = &#x27;bob&#x27;, auth_database = &#x27;local&#x27;, temp = &#x27;log_profile&#x27;, https = &#x27;yes&#x27;<br/>telent = &#x27;yes&#x27;, ssh = &#x27;yes&#x27;, console = &#x27;yes&#x27;, password = &#x27;admin@139&#x27;<br/>confirm_password = &#x27;admin@139&#x27;, status = &#x27;enable&#x27;, interface = &#x27;ge0/1&#x27;<br/>online_num = &#x27;32&#x27;, ip1 = &#x27;0.0.0.0/0&#x27;, ip2 = &#x27;&#x27;, ip3 = &#x27;&#x27;, ip4 = &#x27;&#x27;, ip5 = &#x27;&#x27;<br/><br/>    def add_admin(browser, admin_name=&quot;bob&quot;, auth_database=&quot;local&quot;, temp=&quot;log_profile&quot;, https=&quot;yes&quot;, telent=&quot;yes&quot;,<br/>                  ssh=&quot;yes&quot;, console=&quot;yes&quot;, password=&quot;admin@139&quot;, confirm_password=&quot;admin@139&quot;, status=&quot;enable&quot;,<br/>                  interface=interface_name_1, online_num=&quot;32&quot;, ip1=&quot;0.0.0.0/0&quot;, ip2=&quot;&quot;, ip3=&quot;&quot;, ip4=&quot;&quot;, ip5=&quot;&quot;):<br/>    	# 切换到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	#<br/>    	# # 切换到左侧frame<br/>    	# browser.switch_to.frame(&quot;lefttree&quot;)<br/>    	#<br/>    	# browser.find_element_by_xpath(系统).click()<br/>    	#<br/>    	# # 判断菜单是否展开，元素是否可见<br/>    	# if not browser.find_element_by_xpath(display_系统管理).is_displayed():<br/>    	# 	# 如果不可见，点击加号，展开元素<br/>    	# 	browser.find_element_by_xpath(系统管理).click()<br/>    	#<br/>    	# browser.find_element_by_xpath(管理员).click()<br/>    	# # 定位到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# # 定位到内容frame<br/>    	# browser.switch_to.frame(&quot;content&quot;)<br/>    	# 点击管理员列表<br/>    	into_fun(browser, 管理员)<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;tabs&quot;]/li[1]/a/span&#x27;).click()<br/>    	# 点击添加<br/>    	time.sleep(0.5)<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;button_area&quot;]/div/input&#x27;).click()<br/>    	# 输入管理员名称<br/>    	time.sleep(0.5)<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;name&quot;]&#x27;).send_keys(admin_name)<br/>    <br/>    	# 选认证数据库<br/>    	s1 = Select(browser.find_element_by_xpath(&#x27;//*[@id=&quot;authdatabase&quot;]&#x27;))<br/>    	# 选认证数据库下拉框内容<br/>    	s1.select_by_visible_text(auth_database)<br/>    <br/>    	# 选profile下拉框<br/>    	s1 = Select(browser.find_element_by_xpath(&#x27;//*[@id=&quot;profile&quot;]&#x27;))<br/>    	# 选profile下拉框内容<br/>    	time.sleep(0.5)<br/>&gt;   	s1.select_by_visible_text(temp)<br/><br/>page_obj\scg\scg_def_sys.py:323: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.support.select.Select object at 0x00000000067F8780&gt;<br/>text = &#x27;log_profile&#x27;<br/><br/>    def select_by_visible_text(self, text):<br/>        &quot;&quot;&quot;Select all options that display text matching the argument. That is, when given &quot;Bar&quot; this<br/>               would select an option like:<br/>    <br/>                &lt;option value=&quot;foo&quot;&gt;Bar&lt;/option&gt;<br/>    <br/>               :Args:<br/>                - text - The visible text to match against<br/>    <br/>                throws NoSuchElementException If there is no option with specisied text in SELECT<br/>               &quot;&quot;&quot;<br/>        xpath = &quot;.//option[normalize-space(.) = %s]&quot; % self._escapeString(text)<br/>        opts = self._el.find_elements(By.XPATH, xpath)<br/>        matched = False<br/>        for opt in opts:<br/>            self._setSelected(opt)<br/>            if not self.is_multiple:<br/>                return<br/>            matched = True<br/>    <br/>        if len(opts) == 0 and &quot; &quot; in text:<br/>            subStringWithoutSpace = self._get_longest_token(text)<br/>            if subStringWithoutSpace == &quot;&quot;:<br/>                candidates = self.options<br/>            else:<br/>                xpath = &quot;.//option[contains(.,%s)]&quot; % self._escapeString(subStringWithoutSpace)<br/>                candidates = self._el.find_elements(By.XPATH, xpath)<br/>            for candidate in candidates:<br/>                if text == candidate.text:<br/>                    self._setSelected(candidate)<br/>                    if not self.is_multiple:<br/>                        return<br/>                    matched = True<br/>    <br/>        if not matched:<br/>&gt;           raise NoSuchElementException(&quot;Could not locate element with visible text: %s&quot; % text)<br/><span class="error">E           selenium.common.exceptions.NoSuchElementException: Message: Could not locate element with visible text: log_profile</span><br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\select.py:140: NoSuchElementException<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/><br/>    def test_c139359(browser):<br/>    	try:<br/>    		# 登录函数<br/>    		login_web(browser, url=dev1)<br/>    		add_admin(browser,<br/>    	              admin_name=&quot;bob&quot;, auth_database=&quot;local&quot;,<br/>    	              temp=&quot;log_profile&quot;,<br/>    	              https=&quot;yes&quot;, telent=&quot;yes&quot;, ssh=&quot;yes&quot;, console=&quot;yes&quot;,<br/>    	              password=&quot;admin@139&quot;, confirm_password=&quot;admin@139&quot;,<br/>    	              status=&quot;enable&quot;, interface=interface_name_1, online_num=&quot;32&quot;, ip1=&quot;0.0.0.0/0&quot;)<br/>    <br/>    		add_admin(browser,<br/>    		          admin_name=&quot;bob1&quot;, auth_database=&quot;local&quot;,<br/>    		          temp=&quot;config_profile&quot;,<br/>    		          https=&quot;yes&quot;, telent=&quot;yes&quot;, ssh=&quot;yes&quot;, console=&quot;yes&quot;,<br/>    		          password=&quot;admin@139&quot;, confirm_password=&quot;admin@139&quot;,<br/>    		          status=&quot;enable&quot;, interface=interface_name_1, online_num=&quot;32&quot;, ip1=&quot;0.0.0.0/0&quot;)<br/>    <br/>    		login_web(browser, url=dev1, username=&quot;bob&quot;, new=&quot;yes&quot;)<br/>    		info_bob = get_admin_name(browser)<br/>    		# print(info_bob)<br/>    		login_web(browser, url=dev1, username=&quot;bob1&quot;, new=&quot;yes&quot;)<br/>    		info_bob1 = get_admin_name(browser)<br/>    		# print(info_bob1)<br/>    <br/>    		try:<br/>    			assert len(info_bob) == 1 and len(info_bob1) == 1<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert len(info_bob) == 1 and len(info_bob1) == 1<br/>    <br/>    		login_web(browser, url=dev1, new=&quot;yes&quot;)<br/>    		delete_all_admin_list_jyl(browser)<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_Administrator\test_c139359.py:60: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-05 09:05:52.932676</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139363.py::test_admin_user_add</td>
+          <td>None</td>
+          <td class="col-duration">81.03</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/><br/>    def test_admin_user_add(browser):<br/>    	try:<br/>    		# 登录函数<br/>    		login_web(browser, url=dev1)<br/>    		add_admin(browser, admin_name=&quot;bob&quot;, auth_database=&quot;local&quot;, temp=&quot;max_profile&quot;, https=&quot;yes&quot;, telent=&quot;no&quot;,<br/>&gt;   		          ssh=&quot;yes&quot;, console=&quot;yes&quot;, status=&quot;enable&quot;, interface=&quot;any&quot;, online_num=&quot;3&quot;, ip1=&quot;192.168.18.0/24&quot;)<br/><br/>test_case\scg\scg_Administrator\test_c139363.py:21: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/>admin_name = &#x27;bob&#x27;, auth_database = &#x27;local&#x27;, temp = &#x27;max_profile&#x27;, https = &#x27;yes&#x27;<br/>telent = &#x27;no&#x27;, ssh = &#x27;yes&#x27;, console = &#x27;yes&#x27;, password = &#x27;admin@139&#x27;<br/>confirm_password = &#x27;admin@139&#x27;, status = &#x27;enable&#x27;, interface = &#x27;any&#x27;<br/>online_num = &#x27;3&#x27;, ip1 = &#x27;192.168.18.0/24&#x27;, ip2 = &#x27;&#x27;, ip3 = &#x27;&#x27;, ip4 = &#x27;&#x27;<br/>ip5 = &#x27;&#x27;<br/><br/>    def add_admin(browser, admin_name=&quot;bob&quot;, auth_database=&quot;local&quot;, temp=&quot;log_profile&quot;, https=&quot;yes&quot;, telent=&quot;yes&quot;,<br/>                  ssh=&quot;yes&quot;, console=&quot;yes&quot;, password=&quot;admin@139&quot;, confirm_password=&quot;admin@139&quot;, status=&quot;enable&quot;,<br/>                  interface=interface_name_1, online_num=&quot;32&quot;, ip1=&quot;0.0.0.0/0&quot;, ip2=&quot;&quot;, ip3=&quot;&quot;, ip4=&quot;&quot;, ip5=&quot;&quot;):<br/>    	# 切换到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	#<br/>    	# # 切换到左侧frame<br/>    	# browser.switch_to.frame(&quot;lefttree&quot;)<br/>    	#<br/>    	# browser.find_element_by_xpath(系统).click()<br/>    	#<br/>    	# # 判断菜单是否展开，元素是否可见<br/>    	# if not browser.find_element_by_xpath(display_系统管理).is_displayed():<br/>    	# 	# 如果不可见，点击加号，展开元素<br/>    	# 	browser.find_element_by_xpath(系统管理).click()<br/>    	#<br/>    	# browser.find_element_by_xpath(管理员).click()<br/>    	# # 定位到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# # 定位到内容frame<br/>    	# browser.switch_to.frame(&quot;content&quot;)<br/>    	# 点击管理员列表<br/>    	into_fun(browser, 管理员)<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;tabs&quot;]/li[1]/a/span&#x27;).click()<br/>    	# 点击添加<br/>    	time.sleep(0.5)<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;button_area&quot;]/div/input&#x27;).click()<br/>    	# 输入管理员名称<br/>    	time.sleep(0.5)<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;name&quot;]&#x27;).send_keys(admin_name)<br/>    <br/>    	# 选认证数据库<br/>    	s1 = Select(browser.find_element_by_xpath(&#x27;//*[@id=&quot;authdatabase&quot;]&#x27;))<br/>    	# 选认证数据库下拉框内容<br/>    	s1.select_by_visible_text(auth_database)<br/>    <br/>    	# 选profile下拉框<br/>    	s1 = Select(browser.find_element_by_xpath(&#x27;//*[@id=&quot;profile&quot;]&#x27;))<br/>    	# 选profile下拉框内容<br/>    	time.sleep(0.5)<br/>&gt;   	s1.select_by_visible_text(temp)<br/><br/>page_obj\scg\scg_def_sys.py:323: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.support.select.Select object at 0x000000000685CF60&gt;<br/>text = &#x27;max_profile&#x27;<br/><br/>    def select_by_visible_text(self, text):<br/>        &quot;&quot;&quot;Select all options that display text matching the argument. That is, when given &quot;Bar&quot; this<br/>               would select an option like:<br/>    <br/>                &lt;option value=&quot;foo&quot;&gt;Bar&lt;/option&gt;<br/>    <br/>               :Args:<br/>                - text - The visible text to match against<br/>    <br/>                throws NoSuchElementException If there is no option with specisied text in SELECT<br/>               &quot;&quot;&quot;<br/>        xpath = &quot;.//option[normalize-space(.) = %s]&quot; % self._escapeString(text)<br/>        opts = self._el.find_elements(By.XPATH, xpath)<br/>        matched = False<br/>        for opt in opts:<br/>            self._setSelected(opt)<br/>            if not self.is_multiple:<br/>                return<br/>            matched = True<br/>    <br/>        if len(opts) == 0 and &quot; &quot; in text:<br/>            subStringWithoutSpace = self._get_longest_token(text)<br/>            if subStringWithoutSpace == &quot;&quot;:<br/>                candidates = self.options<br/>            else:<br/>                xpath = &quot;.//option[contains(.,%s)]&quot; % self._escapeString(subStringWithoutSpace)<br/>                candidates = self._el.find_elements(By.XPATH, xpath)<br/>            for candidate in candidates:<br/>                if text == candidate.text:<br/>                    self._setSelected(candidate)<br/>                    if not self.is_multiple:<br/>                        return<br/>                    matched = True<br/>    <br/>        if not matched:<br/>&gt;           raise NoSuchElementException(&quot;Could not locate element with visible text: %s&quot; % text)<br/><span class="error">E           selenium.common.exceptions.NoSuchElementException: Message: Could not locate element with visible text: max_profile</span><br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\support\select.py:140: NoSuchElementException<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/><br/>    def test_admin_user_add(browser):<br/>    	try:<br/>    		# 登录函数<br/>    		login_web(browser, url=dev1)<br/>    		add_admin(browser, admin_name=&quot;bob&quot;, auth_database=&quot;local&quot;, temp=&quot;max_profile&quot;, https=&quot;yes&quot;, telent=&quot;no&quot;,<br/>    		          ssh=&quot;yes&quot;, console=&quot;yes&quot;, status=&quot;enable&quot;, interface=&quot;any&quot;, online_num=&quot;3&quot;, ip1=&quot;192.168.18.0/24&quot;)<br/>    <br/>    		browser.get(&quot;https://&quot; + dev1)<br/>    		# 输入帐号<br/>    		browser.find_element_by_xpath(&quot;//*[@id=&#x27;input_username&#x27;]&quot;).send_keys(&quot;bob&quot;)<br/>    		# 输入密码<br/>    		browser.find_element_by_xpath(&quot;//*[@id=&#x27;input_password&#x27;]&quot;).send_keys(&quot;admin@139&quot;)<br/>    		# 验证码0613<br/>    		browser.find_element_by_xpath(&quot;/html/body/div[1]/div[2]/form/div[4]/div/div/input&quot;).send_keys(<br/>    			&quot;0613&quot;)<br/>    		# 点击登入<br/>    		browser.find_element_by_xpath(&quot;//*[@id=&#x27;login-div&#x27;]/form/div[5]/input&quot;).click()<br/>    <br/>    <br/>    		info_login = browser.find_element_by_xpath(&#x27;//*[@id=&quot;box&quot;]/div[3]/ul/li[2]&#x27;).text<br/>    <br/>    		login_web(browser, url=dev1)<br/>    		delete_all_admin_list_jyl(browser)<br/>    <br/>    		login_web(browser, url=dev1)<br/>    		add_admin(browser, admin_name=&quot;bob&quot;, auth_database=&quot;local&quot;, temp=&quot;max_profile&quot;, https=&quot;yes&quot;, telent=&quot;no&quot;,<br/>    		          ssh=&quot;yes&quot;, console=&quot;yes&quot;, status=&quot;enable&quot;, interface=&quot;any&quot;, online_num=&quot;3&quot;, ip1=&quot;192.168.188.0/24&quot;,<br/>    		          ip2=&quot;10.1.1.0/24&quot;)<br/>    <br/>    		login_web(browser, url=dev1, username=&quot;bob&quot;, new=&quot;yes&quot;)<br/>    		# host = get_sys_info_hostname(browser)<br/>    		# print(host)<br/>    <br/>    		try:<br/>    			assert &quot;不支持的登录ip&quot; in info_login<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;不支持的登录ip&quot; in info_login<br/>    		sign_out_jyl(browser)<br/>    		login_web(browser, url=dev1)<br/>    		delete_all_admin_list_jyl(browser)<br/>    <br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_Administrator\test_c139363.py:66: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-05 09:16:55.392566</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139373.py::test_c139373</td>
+          <td>None</td>
+          <td class="col-duration">140.54</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/><br/>    def test_c139373(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		sleep(2)<br/>    		add_admin_profile(browser, profile_name=&#x27;lzy&#x27;)<br/>    		add_admin(browser, admin_name=&#x27;lzy&#x27;, temp=&#x27;lzy&#x27;)<br/>    		sys_set_lzy(browser, ssh_port=&quot;22&quot;, ssh_timeout=&quot;300&quot;, https_port=&quot;500&quot;, https_timeout=&quot;300&quot;, telent_port=&quot;23&quot;,<br/>&gt;   					telent_timeout=&quot;300&quot;, console_timeout=&quot;300&quot;)<br/><br/>test_case\scg\scg_Administrator\test_c139373.py:25: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/>ssh_port = &#x27;22&#x27;, ssh_timeout = &#x27;300&#x27;, https_port = &#x27;500&#x27;, https_timeout = &#x27;300&#x27;<br/>telent_port = &#x27;23&#x27;, telent_timeout = &#x27;300&#x27;, console_timeout = &#x27;300&#x27;<br/>frozen_time = &#x27;600&#x27;, expire_time = &#x27;600&#x27;, retry = &#x27;3&#x27;<br/><br/>    def sys_set_lzy(browser, ssh_port=&quot;22&quot;, ssh_timeout=&quot;600&quot;, https_port=&quot;443&quot;, https_timeout=&quot;600&quot;, telent_port=&quot;23&quot;,<br/>                    telent_timeout=&quot;600&quot;, console_timeout=&quot;600&quot;, frozen_time=&quot;600&quot;, expire_time=&quot;600&quot;, retry=&quot;3&quot;):<br/>    	# 定位到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# browser.switch_to.frame(&quot;lefttree&quot;)<br/>    	# # 点击系统<br/>    	# browser.find_element_by_xpath(系统).click()<br/>    	# if not browser.find_element_by_xpath(&#x27;//*[@id=&quot;menu&quot;]/div[1]/div/ul/li[2]&#x27;).is_displayed():<br/>    	# 	# 如果不可见，点击加号，展开元素<br/>    	# 	browser.find_element_by_xpath(系统管理).click()<br/>    	# # 点击物理接口<br/>    	# browser.find_element_by_xpath(管理员).click()<br/>    	# # 定位到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# # 定位到内容frame<br/>    	# browser.switch_to.frame(&quot;content&quot;)<br/>    	into_fun(browser, 管理员)<br/>    	# 点击系统设定<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;tabs&quot;]/li[3]/a/span&#x27;).click()<br/>    	time.sleep(3)<br/>    	# ssh设置<br/>    	# 清除默认输入内容<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;sshport&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;sshport&quot;]&#x27;).send_keys(ssh_port)<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;sshtimeout&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;sshtimeout&quot;]&#x27;).send_keys(ssh_timeout)<br/>    	# print(&quot;5612&quot;)<br/>    	sleep(2)<br/>    <br/>    	# https设置<br/>    	# 清除默认输入内容<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;httpsport&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;httpsport&quot;]&#x27;).send_keys(https_port)<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;httpstimeout&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;httpstimeout&quot;]&#x27;).send_keys(https_timeout)<br/>    <br/>    	# telent设置<br/>    	# 清除默认输入内容<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;telnetport&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;telnetport&quot;]&#x27;).send_keys(telent_port)<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;telnettimeout&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;telnettimeout&quot;]&#x27;).send_keys(telent_timeout)<br/>    <br/>    	# console设置<br/>    	# 清除默认输入内容<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;consoletimeout&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;consoletimeout&quot;]&#x27;).send_keys(console_timeout)<br/>    <br/>    	# frozen_time设置<br/>    	# 清除默认输入内容<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;fronzedtime&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;fronzedtime&quot;]&#x27;).send_keys(frozen_time)<br/>    <br/>    	# expire_time设置<br/>    	# 清除默认输入内容<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;expire_time&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;expire_time&quot;]&#x27;).send_keys(expire_time)<br/>    <br/>    	# retry设置<br/>    	# 清除默认输入内容<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;retry&quot;]&#x27;).clear()<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;retry&quot;]&#x27;).send_keys(retry)<br/>    	# 点击保存<br/>    	browser.find_element_by_xpath(&#x27;//*[@id=&quot;container&quot;]/div[2]/form/div[2]/div[2]/div/input[2]&#x27;).click()<br/>    	time.sleep(3)<br/>    <br/>    	if https_port != &quot;443&quot; and https_port &gt;= &#x27;1&#x27; and https_port &lt;= &#x27;65535&#x27;:<br/>    		# 接受告警<br/>    		browser.switch_to_alert().accept()<br/>    		time.sleep(2)<br/>    		browser.refresh()<br/>    		time.sleep(2)<br/>    		x = https_port<br/>&gt;   		login_web(browser, url=&quot;10.2.2.81:&quot; + str(x))<br/><span class="error">E     NameError: name &#x27;login_web&#x27; is not defined</span><br/><br/>page_obj\scg\scg_def_sys.py:245: NameError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/><br/>    def test_c139373(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		sleep(2)<br/>    		add_admin_profile(browser, profile_name=&#x27;lzy&#x27;)<br/>    		add_admin(browser, admin_name=&#x27;lzy&#x27;, temp=&#x27;lzy&#x27;)<br/>    		sys_set_lzy(browser, ssh_port=&quot;22&quot;, ssh_timeout=&quot;300&quot;, https_port=&quot;500&quot;, https_timeout=&quot;300&quot;, telent_port=&quot;23&quot;,<br/>    					telent_timeout=&quot;300&quot;, console_timeout=&quot;300&quot;)<br/>    <br/>    		time.sleep(2)<br/>    		refresh(browser)<br/>    		login_web(browser, url=dev1)<br/>    		sleep(2)<br/>    		sign_out_jyl(browser)<br/>    		sleep(2)<br/>    		login_web(browser, url=dev1, username=&#x27;lzy&#x27;)<br/>    		time.sleep(2)<br/>    		refresh(browser)<br/>    		time.sleep(2)<br/>    		log1 = get_log(browser, 系统日志)<br/>    		# print(log1)<br/>    <br/>    		sleep(2)<br/>    		sign_out_jyl(browser)<br/>    		sleep(2)<br/>    		login_web(browser, url=dev1)<br/>    		delete_all_admin_list_jyl(browser)<br/>    		delete_all_admin_profile_jyl(browser)<br/>    <br/>    		try:<br/>    			assert &#x27;管理员登录成功&#x27; in log1<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &#x27;管理员登录成功&#x27; in log1<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_Administrator\test_c139373.py:58: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-05 09:50:15.428962</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139452.py::test_c139452</td>
+          <td>None</td>
+          <td class="col-duration">115.51</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/><br/>    def test_c139452(browser):<br/>    	try:<br/>    		# 登录<br/>    		login_web(browser, url=dev1)<br/>    		s = get_admin_list_look_online_admin(browser)<br/>    		while s &lt; 5:<br/>    			a2 = Shell_SSH()<br/>    			a2.connect(dev1)<br/>    			s = get_admin_list_look_online_admin(browser)<br/>    		# login_web(browser, url=dev1, new=&quot;yes&quot;)<br/>    		# 添加admin user，输入name为root<br/>    		edit_admin_jyl(browser, edit_admin_name=&quot;admin&quot;, interface=&quot;any&quot;, online_num=&quot;5&quot;)<br/>    		a4 = Shell_SSH()<br/>    		a4.connect(dev1)<br/>&gt;   		online_num = get_admin_list_look_online_admin(browser)<br/><br/>test_case\scg\scg_Administrator\test_c139452.py:32: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/><br/>    def get_admin_list_look_online_admin(browser):<br/>    	browser.refresh()<br/>    	# 切换到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# # 切换到左侧frame<br/>    	# browser.switch_to.frame(&quot;lefttree&quot;)<br/>    	# # 点击系统<br/>    	# browser.find_element_by_xpath(系统).click()<br/>    	# # 判断菜单是否展开，元素是否可见<br/>    	# if not browser.find_element_by_xpath(display_系统管理).is_displayed():<br/>    	# 	# 如果不可见，点击加号，展开元素<br/>    	# 	browser.find_element_by_xpath(系统管理).click()<br/>    	# browser.find_element_by_xpath(管理员).click()<br/>    	# # 定位到默认frame<br/>    	# browser.switch_to.default_content()<br/>    	# # 定位到内容frame<br/>    	# browser.switch_to.frame(&quot;content&quot;)<br/>&gt;   	into_fun(browser, 管理员)<br/><br/>page_obj\scg\scg_def_sys.py:1279: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/>menu = &#x27;sys_administrators&#x27;<br/><br/>    def into_fun(browser, menu):<br/>    	if oem_name == &quot;ICF&quot;:<br/>    <br/>    		# print(&quot;进入ICF导航&quot;)<br/>    		try:<br/>    			# print(&quot;Alert exists&quot;)<br/>    			alert_info = &quot;init&quot;<br/>    			while alert_info is not None:<br/>    				alert = browser.switch_to_alert()<br/>    				alert_info = alert.text<br/>    				print(alert_info)<br/>    				alert.accept()<br/>    		except:<br/>    			# print(&quot;无警告，点击返回&quot;)<br/>    			try:<br/>    				browser.find_element_by_xpath(&#x27;// *[ @ id = &quot;link_but&quot;]&#x27;).click()<br/>    			except:<br/>    				# print(&quot;无点击返回&quot;)<br/>    				pass<br/>    		browser.switch_to.default_content()<br/>    		# 定位到左侧frame<br/>    		browser.switch_to.frame(&quot;lefttree&quot;)<br/>    <br/>    		if menu in [系统状态, 管理员, 系统升级, Web证书, 重启系统, 系统信息, 时间设定, DNS,<br/>    		            配置文件, 高可用性, SNMP设置, SNMP_Trap, 网络诊断, 服务器诊断]:<br/>    			browser.find_element_by_name(系统).click()<br/>    			if menu == 系统状态:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [管理员, 系统升级, Web证书, 重启系统]:<br/>    				if not browser.find_element_by_xpath(display_系统管理).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(系统管理).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [系统信息,  时间设定, DNS, 配置文件, 高可用性, SNMP设置, SNMP_Trap]:<br/>    				if not browser.find_element_by_xpath(display_配置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(配置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [网络诊断, 服务器诊断]:<br/>    				if not browser.find_element_by_xpath(display_诊断工具).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(诊断工具).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [物理接口, 子接口, 网桥, 静态路由, 策略路由, OSPF, ISP自动选择, 多网关组, 路由监控, DHCP设定, DHCP租用列表,<br/>    		              ARP列表, 桥MAC表, IPv6邻居列表, IPv6隧道]:<br/>    			browser.find_element_by_name(网络).click()<br/>    			if menu in [物理接口, 子接口, 网桥]:<br/>    				if not browser.find_element_by_xpath(display_接口设置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(接口设置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [静态路由, 策略路由, OSPF, ISP自动选择, 多网关组, 路由监控]:<br/>    				if not browser.find_element_by_xpath(display_路由).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(路由).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [DHCP设定, DHCP租用列表]:<br/>    				if not browser.find_element_by_xpath(display_DHCP).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(DHCP).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [ARP列表, 桥MAC表, IPv6邻居列表, IPv6隧道]:<br/>    				if not browser.find_element_by_xpath(display_MAC).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(MAC).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [模式切换, 自定义规则, 机器学习, 安全事件, 工业漏洞, ARP防护, 访问策略, IPV6访问策略, 地址, 地址范围,<br/>    		              地址组, IPv6地址, IPv6地址范围, IPv6地址组, 计划任务, 区域, 预定义服务, 自定义服务, 服务组, 目标地址转换,<br/>    		              源地址转换, 负载均衡]:<br/>    			browser.find_element_by_name(安全策略).click()<br/>    			if menu in [模式切换, 自定义规则, 机器学习, 安全事件, 工业漏洞, ARP防护, 访问策略, IPV6访问策略]:<br/>    				if not browser.find_element_by_xpath(display_工业防护策略).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(工业防护策略).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [地址, 地址范围, 地址组, IPv6地址, IPv6地址范围, IPv6地址组, 计划任务, 区域, 预定义服务, 自定义服务,<br/>    			              服务组]:<br/>    				if not browser.find_element_by_xpath(display_对象).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(对象).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [目标地址转换, 源地址转换, 负载均衡]:<br/>    				if not browser.find_element_by_xpath(display_地址转换).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(地址转换).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [主机标识, 应用加密, 手动密钥, 远程网关, 远程访问, 监控, CA证书]:<br/>    			browser.find_element_by_name(虚拟专网).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [Anti_DDoS设置, Anti_DDoS用户配置, Anti_DDoS规则列表, Anti_DDoS黑_白名单]:<br/>    			browser.find_element_by_name(DDoS防护).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [用户配置, 本地用户, 认证组, 认证服务器, 认证用户设置, 认证监控]:<br/>    			browser.find_element_by_name(认证用户).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [日志统计, 日志服务器, 日志过滤, 日志格式, 日志告警, 管理日志, 系统日志, 安全日志, 流量日志]:<br/>    			browser.find_element_by_name(日志).click()<br/>    			if menu == 日志统计:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [日志服务器, 日志过滤, 日志格式, 日志告警]:<br/>    				if not browser.find_element_by_xpath(display_日志设置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(日志设置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [管理日志, 系统日志, 安全日志, 流量日志]:<br/>    				if not browser.find_element_by_xpath(display_日志记录).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(日志记录).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    				time.sleep(2)<br/>    <br/>    		elif menu in [报表设置, 接口统计报表, 流量排行报表, 会话监控报表, 系统状态报表, 事件统计报表, 会话表, Anti_DDoS会话数,<br/>    		              Anti_DDoS会话速率, Anti_DDoS数据包速率, Top_N, 来源IP统计]:<br/>    			browser.find_element_by_name(报表).click()<br/>    			if menu in [报表设置, 接口统计报表, 流量排行报表, 会话监控报表, 系统状态报表, 事件统计报表, 会话表]:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [Anti_DDoS会话数, Anti_DDoS会话速率, Anti_DDoS数据包速率, Top_N, 来源IP统计]:<br/>    				if not browser.find_element_by_xpath(display_DDoS防护).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(DDoS防护).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		else:<br/>    			print(&quot;导航菜单未知，请检查是否输入错误，或切换函数。&quot;)<br/>    <br/>    		browser.switch_to.default_content()<br/>    		# 定位到内容frame<br/>    		time.sleep(1)<br/>    		try:<br/>    			time.sleep(1)<br/>    			browser.switch_to.frame(&quot;content&quot;)<br/>    		except Exception as err:<br/>    			print(err)<br/>    			print(&quot;导航处进入，没有找到frame&quot;)<br/>    <br/>    	elif oem_name == &quot;SCG&quot; or oem_name == &quot;万兆测试&quot;:<br/>    		# print(&quot;进入SCG导航&quot;)<br/>    		# 有时间界面会出现告警，需要将告警信息print出来<br/>    		try:<br/>    			# print(&quot;Alert exists&quot;)<br/>    			alert = browser.switch_to_alert()<br/>    			print(alert.text)<br/>    			alert.accept()<br/>    		except Exception as err1:<br/>    			# print(&quot;无警告，点击返回&quot;)<br/>    			# print(err1)<br/>    			# print(&#x27;文件&#x27;, err1.__traceback__.tb_frame.f_globals[&#x27;__file__&#x27;])<br/>    			# print(&#x27;行号&#x27;, err1.__traceback__.tb_lineno)<br/>    			pass<br/>    			try:<br/>    				browser.find_element_by_xpath(&#x27;// *[ @ id = &quot;link_but&quot;]&#x27;).click()<br/>    			except:<br/>    				# print(&quot;无点击返回&quot;)<br/>    				pass<br/>    		# browser.refresh()<br/>    		browser.switch_to.default_content()<br/>    		# 定位到左侧frame<br/>    		time.sleep(1)<br/>&gt;   		browser.switch_to.frame(&quot;lefttree&quot;)<br/><br/>page_obj\common\my_selenium.py:243: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.switch_to.SwitchTo object at 0x000000000615C940&gt;<br/>frame_reference = &#x27;lefttree&#x27;<br/><br/>    def frame(self, frame_reference):<br/>        &quot;&quot;&quot;<br/>            Switches focus to the specified frame, by index, name, or webelement.<br/>    <br/>            :Args:<br/>             - frame_reference: The name of the window to switch to, an integer representing the index,<br/>                                or a webelement that is an (i)frame to switch to.<br/>    <br/>            :Usage:<br/>                driver.switch_to.frame(&#x27;frame_name&#x27;)<br/>                driver.switch_to.frame(1)<br/>                driver.switch_to.frame(driver.find_elements_by_tag_name(&quot;iframe&quot;)[0])<br/>            &quot;&quot;&quot;<br/>        if isinstance(frame_reference, basestring) and self._driver.w3c:<br/>            try:<br/>                frame_reference = self._driver.find_element(By.ID, frame_reference)<br/>            except NoSuchElementException:<br/>                try:<br/>                    frame_reference = self._driver.find_element(By.NAME, frame_reference)<br/>                except NoSuchElementException:<br/>                    raise NoSuchFrameException(frame_reference)<br/>    <br/>&gt;       self._driver.execute(Command.SWITCH_TO_FRAME, {&#x27;id&#x27;: frame_reference})<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\switch_to.py:89: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/>driver_command = &#x27;switchToFrame&#x27;<br/>params = {&#x27;id&#x27;: &#x27;lefttree&#x27;, &#x27;sessionId&#x27;: &#x27;92ed6277350a09d7b48b9fb0295fc281&#x27;}<br/><br/>    def execute(self, driver_command, params=None):<br/>        &quot;&quot;&quot;<br/>            Sends a command to be executed by a command.CommandExecutor.<br/>    <br/>            :Args:<br/>             - driver_command: The name of the command to execute as a string.<br/>             - params: A dictionary of named parameters to send with the command.<br/>    <br/>            :Returns:<br/>              The command&#x27;s JSON response loaded into a dictionary object.<br/>            &quot;&quot;&quot;<br/>        if self.session_id is not None:<br/>            if not params:<br/>                params = {&#x27;sessionId&#x27;: self.session_id}<br/>            elif &#x27;sessionId&#x27; not in params:<br/>                params[&#x27;sessionId&#x27;] = self.session_id<br/>    <br/>        params = self._wrap_value(params)<br/>        response = self.command_executor.execute(driver_command, params)<br/>        if response:<br/>&gt;           self.error_handler.check_response(response)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:320: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x00000000067C16D8&gt;<br/>response = {&#x27;sessionId&#x27;: &#x27;92ed6277350a09d7b48b9fb0295fc281&#x27;, &#x27;status&#x27;: 8, &#x27;value&#x27;: {&#x27;message&#x27;: &#x27;no such frame\n  (Session info: c...r info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)&#x27;}}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>            Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>            :Args:<br/>             - response - The JSON response from the WebDriver server as a dictionary<br/>               object.<br/>    <br/>            :Raises: If the response contains an error message.<br/>            &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchFrameException: Message: no such frame</span><br/><span class="error">E         (Session info: chrome=80.0.3987.122)</span><br/><span class="error">E         (Driver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)</span><br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\errorhandler.py:242: NoSuchFrameException<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;92ed6277350a09d7b48b9fb0295fc281&quot;)&gt;<br/><br/>    def test_c139452(browser):<br/>    	try:<br/>    		# 登录<br/>    		login_web(browser, url=dev1)<br/>    		s = get_admin_list_look_online_admin(browser)<br/>    		while s &lt; 5:<br/>    			a2 = Shell_SSH()<br/>    			a2.connect(dev1)<br/>    			s = get_admin_list_look_online_admin(browser)<br/>    		# login_web(browser, url=dev1, new=&quot;yes&quot;)<br/>    		# 添加admin user，输入name为root<br/>    		edit_admin_jyl(browser, edit_admin_name=&quot;admin&quot;, interface=&quot;any&quot;, online_num=&quot;5&quot;)<br/>    		a4 = Shell_SSH()<br/>    		a4.connect(dev1)<br/>    		online_num = get_admin_list_look_online_admin(browser)<br/>    		info1 = &quot;&quot;<br/>    		if online_num == 5:<br/>    			info1 = get_admin_list_look_online_admin(browser)<br/>    			# print(info1)<br/>    <br/>    		try:<br/>    			assert info1 == 5<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert info1 == 5<br/>    		edit_admin_jyl(browser, edit_admin_name=&quot;admin&quot;, interface=&quot;any&quot;, online_num=&quot;32&quot;)<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_Administrator\test_c139452.py:52: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:06:51.540120</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139318.py::test_c129318</td>
+          <td>None</td>
+          <td class="col-duration">40.78</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:07:21.517835</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139319.py::test_c139319</td>
+          <td>None</td>
+          <td class="col-duration">29.97</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:08:00.968091</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139320.py::test_c139320</td>
+          <td>None</td>
+          <td class="col-duration">39.45</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:08:36.292111</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139321.py::test_c139321</td>
+          <td>None</td>
+          <td class="col-duration">35.32</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:13:38.942422</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139322.py::test_c139322</td>
+          <td>None</td>
+          <td class="col-duration">302.65</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:15:41.035405</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139323.py::test_c139323</td>
+          <td>None</td>
+          <td class="col-duration">122.09</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:16:36.606584</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139327.py::test_c139327</td>
+          <td>None</td>
+          <td class="col-duration">55.57</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:17:36.598015</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139328.py::test_c139328</td>
+          <td>None</td>
+          <td class="col-duration">59.99</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:18:36.968468</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139329.py::test_c139329</td>
+          <td>None</td>
+          <td class="col-duration">60.37</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:19:55.873981</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139330.py::test_c139330</td>
+          <td>None</td>
+          <td class="col-duration">78.90</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:27:10.146820</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139331.py::test_c139331</td>
+          <td>None</td>
+          <td class="col-duration">434.27</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:28:15.887580</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139332.py::test_c139332</td>
+          <td>None</td>
+          <td class="col-duration">65.74</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:29:28.663743</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139333.py::test_c139333</td>
+          <td>None</td>
+          <td class="col-duration">72.77</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:30:24.478935</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139334.py::test_c139334</td>
+          <td>None</td>
+          <td class="col-duration">55.81</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:30:25.020966</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139337.py::test_c139337</td>
+          <td>None</td>
+          <td class="col-duration">0.54</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:30:25.573998</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139338.py::test_139338</td>
+          <td>None</td>
+          <td class="col-duration">0.55</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:31:18.706037</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139339.py::test_c139339</td>
+          <td>None</td>
+          <td class="col-duration">53.13</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:32:03.070574</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139340.py::test_c139340</td>
+          <td>None</td>
+          <td class="col-duration">44.36</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:33:14.108638</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139341.py::test_c139341</td>
+          <td>None</td>
+          <td class="col-duration">71.03</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:36:09.589675</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139342.py::test_c139342</td>
+          <td>None</td>
+          <td class="col-duration">175.48</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:36:40.252428</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139343.py::test_c139343</td>
+          <td>None</td>
+          <td class="col-duration">30.66</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:37:09.495101</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139344.py::test_c139344</td>
+          <td>None</td>
+          <td class="col-duration">29.24</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:37:53.092595</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139345.py::test_c139345</td>
+          <td>None</td>
+          <td class="col-duration">43.59</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:38:41.130342</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139348.py::test_c139348</td>
+          <td>None</td>
+          <td class="col-duration">48.03</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:46:05.979786</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139349.py::test_c139349</td>
+          <td>None</td>
+          <td class="col-duration">444.85</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:51:11.143240</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139350.py::test_c139350</td>
+          <td>None</td>
+          <td class="col-duration">305.16</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:52:28.207648</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139351.py::test_c139351</td>
+          <td>None</td>
+          <td class="col-duration">77.06</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:53:57.595761</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139352.py::test_c139352</td>
+          <td>None</td>
+          <td class="col-duration">89.39</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:55:22.368610</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139353.py::test_c139353</td>
+          <td>None</td>
+          <td class="col-duration">84.77</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:56:58.357100</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139355.py::test_admin_user_add</td>
+          <td>None</td>
+          <td class="col-duration">95.98</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 08:58:15.201495</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139357.py::test_c139357</td>
+          <td>None</td>
+          <td class="col-duration">76.84</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:01:00.897973</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139359.py::test_c139359</td>
+          <td>None</td>
+          <td class="col-duration">82.39</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:02:03.167534</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139360.py::test_admin_user_add</td>
+          <td>None</td>
+          <td class="col-duration">62.27</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:03:02.450925</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139361.py::test_139361</td>
+          <td>None</td>
+          <td class="col-duration">59.28</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:04:31.736032</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139362.py::test_admin_user_add</td>
+          <td>None</td>
+          <td class="col-duration">89.28</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:07:27.232070</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139363.py::test_admin_user_add</td>
+          <td>None</td>
+          <td class="col-duration">94.30</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:09:06.694759</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139364.py::test_admin_user_add</td>
+          <td>None</td>
+          <td class="col-duration">99.46</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:09:55.548553</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139365.py::test_c139365</td>
+          <td>None</td>
+          <td class="col-duration">48.85</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:12:27.728257</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139367.py::test_c139367</td>
+          <td>None</td>
+          <td class="col-duration">152.17</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:13:30.063822</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139369.py::test_c139369</td>
+          <td>None</td>
+          <td class="col-duration">62.33</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:14:34.754522</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139370.py::test_c139370</td>
+          <td>None</td>
+          <td class="col-duration">64.69</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:20:40.295430</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139374.py::test_c139374</td>
+          <td>None</td>
+          <td class="col-duration">112.44</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:21:06.652938</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139375.py::test_c139375</td>
+          <td>None</td>
+          <td class="col-duration">26.35</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:22:28.295607</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139376.py::test_c139376</td>
+          <td>None</td>
+          <td class="col-duration">81.64</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:22:39.801266</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139377.py::test_c139377</td>
+          <td>None</td>
+          <td class="col-duration">11.50</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:23:49.543255</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139378.py::test_c139378</td>
+          <td>None</td>
+          <td class="col-duration">69.74</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:24:55.693038</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139379.py::test_c139379</td>
+          <td>None</td>
+          <td class="col-duration">66.15</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:26:46.978403</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139382.py::test_c139382</td>
+          <td>None</td>
+          <td class="col-duration">111.28</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:27:15.388028</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139386.py::test_c139386</td>
+          <td>None</td>
+          <td class="col-duration">28.41</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:27:59.277539</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139392.py::test_c139392</td>
+          <td>None</td>
+          <td class="col-duration">43.89</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:28:14.974436</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139398.py::test_c139398</td>
+          <td>None</td>
+          <td class="col-duration">15.69</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:28:45.237167</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139399.py::test_c139399</td>
+          <td>None</td>
+          <td class="col-duration">30.26</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:29:51.858978</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139400.py::test_c139400</td>
+          <td>None</td>
+          <td class="col-duration">66.62</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:30:00.560476</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139409.py::test_c139409</td>
+          <td>None</td>
+          <td class="col-duration">8.70</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:31:08.745375</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139412.py::test_c139412</td>
+          <td>None</td>
+          <td class="col-duration">68.18</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:33:05.675063</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139417.py::test_c139417</td>
+          <td>None</td>
+          <td class="col-duration">116.93</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:34:14.563004</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139418.py::test_c139418</td>
+          <td>None</td>
+          <td class="col-duration">68.88</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:35:31.716417</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139419.py::test_c139419</td>
+          <td>None</td>
+          <td class="col-duration">77.15</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:35:54.846740</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139420.py::test_c139420</td>
+          <td>None</td>
+          <td class="col-duration">23.13</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:37:09.983037</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139424.py::test_c139424</td>
+          <td>None</td>
+          <td class="col-duration">75.13</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:38:05.469211</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139425.py::test_c139425</td>
+          <td>None</td>
+          <td class="col-duration">55.48</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:38:29.641593</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139427.py::test_c139427</td>
+          <td>None</td>
+          <td class="col-duration">24.17</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:38:55.127051</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139428.py::test_c139428</td>
+          <td>None</td>
+          <td class="col-duration">25.48</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:39:06.056676</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139429.py::test_c139429</td>
+          <td>None</td>
+          <td class="col-duration">10.93</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:39:32.679199</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139430.py::test_c139430</td>
+          <td>None</td>
+          <td class="col-duration">26.62</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:39:57.878640</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139431.py::test_c139431</td>
+          <td>None</td>
+          <td class="col-duration">25.20</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:40:12.352468</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139432.py::test_c139432</td>
+          <td>None</td>
+          <td class="col-duration">14.47</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:40:42.137172</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139433.py::test_c139433</td>
+          <td>None</td>
+          <td class="col-duration">29.78</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:40:57.969077</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139434.py::test_c139434</td>
+          <td>None</td>
+          <td class="col-duration">15.83</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:41:12.244894</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139435.py::test_c139435</td>
+          <td>None</td>
+          <td class="col-duration">14.27</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:42:00.373646</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139436.py::test_c139436</td>
+          <td>None</td>
+          <td class="col-duration">48.12</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:42:16.132548</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139438.py::test_c139438</td>
+          <td>None</td>
+          <td class="col-duration">15.75</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:42:33.668551</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139439.py::test_c139439</td>
+          <td>None</td>
+          <td class="col-duration">17.53</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:43:01.797160</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139440.py::test_c139440</td>
+          <td>None</td>
+          <td class="col-duration">28.12</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:43:23.232386</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139441.py::test_c139441</td>
+          <td>None</td>
+          <td class="col-duration">21.43</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:43:45.983687</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139442.py::test_c139442</td>
+          <td>None</td>
+          <td class="col-duration">22.75</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:44:09.478031</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139443.py::test_c139443</td>
+          <td>None</td>
+          <td class="col-duration">23.49</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:45:12.485635</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139444.py::test_c139444</td>
+          <td>None</td>
+          <td class="col-duration">63.00</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:45:36.232993</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139446.py::test_c139446</td>
+          <td>None</td>
+          <td class="col-duration">23.74</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:45:59.103301</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139448.py::test_c139448</td>
+          <td>None</td>
+          <td class="col-duration">22.86</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:46:59.107733</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139449.py::test_c139449</td>
+          <td>None</td>
+          <td class="col-duration">60.00</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:47:58.344121</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139450.py::test_c139450</td>
+          <td>None</td>
+          <td class="col-duration">59.23</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:48:19.718344</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139451.py::test_c139451</td>
+          <td>None</td>
+          <td class="col-duration">21.37</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:52:56.209158</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139453.py::test_c139453</td>
+          <td>None</td>
+          <td class="col-duration">50.72</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-05 09:53:40.883713</td>
+          <td class="col-name">test_case/scg/scg_Administrator/test_c139463.py::test_c139463</td>
+          <td>None</td>
+          <td class="col-duration">41.19</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>

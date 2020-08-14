@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <style>body {
+	font-family: Helvetica, Arial, sans-serif;
+	font-size: 12px;
+	min-width: 1200px;
+	color: #999;
+}
+
+h1 {
+	font-size: 24px;
+	color: black;
+}
+
+h2 {
+	font-size: 16px;
+	color: black;
+}
+
+p {
+    color: black;
+}
+
+a {
+	color: #999;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+
+#environment td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+}
+
+#environment tr:nth-child(odd) {
+	background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed, .passed .col-result {
+	color: green;
+}
+span.skipped, span.xfailed, span.rerun, .skipped .col-result, .xfailed .col-result, .rerun .col-result {
+	color: orange;
+}
+span.error, span.failed, span.xpassed, .error .col-result, .failed .col-result, .xpassed .col-result  {
+	color: red;
+}
+
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+
+#results-table {
+	border: 1px solid #e6e6e6;
+	color: #999;
+	font-size: 12px;
+	width: 100%
+}
+
+#results-table th, #results-table td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+	text-align: left
+}
+#results-table th {
+	font-weight: bold
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+
+.log:only-child {
+	height: inherit
+}
+.log {
+	background-color: #e6e6e6;
+	border: 1px solid #e6e6e6;
+	color: black;
+	display: block;
+	font-family: "Courier New", Courier, monospace;
+	height: 230px;
+	overflow-y: scroll;
+	padding: 5px;
+	white-space: pre-wrap
+}
+div.image {
+	border: 1px solid #e6e6e6;
+	float: right;
+	height: 240px;
+	margin-left: 5px;
+	overflow: hidden;
+	width: 320px
+}
+div.image img {
+	width: 320px
+}
+.collapsed {
+	display: none;
+}
+.expander::after {
+	content: " (show details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+.collapser::after {
+	content: " (hide details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+	cursor: pointer;
+}
+
+.sort-icon {
+	font-size: 0px;
+	float: left;
+	margin-right: 5px;
+	margin-top: 5px;
+	/*triangle*/
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+}
+
+.inactive .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #E6E6E6;
+}
+
+.asc.active .sort-icon {
+	/*finish triangle*/
+	border-bottom: 8px solid #999;
+}
+
+.desc.active .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>2020-03-05_03_35_27ARP_report.html</h1>
+    <p>Report generated on 05-Mar-2020 at 04:57:08 by<a href="https://pypi.python.org/pypi/pytest-html"> pytest-html</a> v1.19.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;3.6.3&apos;, &apos;py&apos;: &apos;1.8.0&apos;, &apos;pluggy&apos;: &apos;0.6.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-7-6.1.7601-SP1</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;rerunfailures&apos;: &apos;4.1&apos;, &apos;metadata&apos;: &apos;1.8.0&apos;, &apos;html&apos;: &apos;1.19.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.0</td></tr></table>
+    <h2>Summary</h2>
+    <p>99 tests ran in 4901.00 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">95 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">4 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">4 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable time" col="time">Time</th>
+          <th class="sortable" col="name">Test</th>
+          <th>Description</th>
+          <th class="sortable numeric" col="duration">Duration</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="5">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-time">2020-03-04 19:37:06.382116</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139585.py::test_c139585</td>
+          <td>None</td>
+          <td class="col-duration">17.65</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139585(browser):<br/>    <br/>    	try:<br/>    		mac1 = get_linux_host_mac_jyl(host_name=&quot;10.1.1.202&quot;, user=&quot;root&quot;, password=&quot;root&quot;, ip_add=&quot;20.1.1.2&quot;).lower()<br/>    		shell_cmd = Shell_SSH()<br/>    		shell_cmd.connect(hostip=&quot;10.1.1.202&quot;, name=&quot;root&quot;, passwd=&quot;root&quot;)<br/>    		shell_cmd.ping(ipadd=&quot;20.1.1.1&quot;)<br/>    		shell_cmd.close()<br/>    		login_web(browser, url=dev1)<br/>    		arp_list = get_dynamic_arp_all(browser)<br/>    		# print(arp_list)<br/>    		try:<br/>&gt;   			assert [&#x27;20.1.1.2&#x27;, mac1, interface_name_4, &#x27;&#x27;] in arp_list<br/><span class="error">E      AssertionError: assert [&#x27;20.1.1.2&#x27;, &#x27;00:0c:29:7b:ff:7c&#x27;, &#x27;ge0/4&#x27;, &#x27;&#x27;] in [[&#x27;10.2.2.1&#x27;, &#x27;00:16:31:e5:7a:23&#x27;, &#x27;ge0/1&#x27;, &#x27;&#x27;], [&#x27;20.1.1.3&#x27;, &#x27;00:0c:29:7b:ff:7c&#x27;, &#x27;ge0/4&#x27;, &#x27;&#x27;]]</span><br/><br/>test_case\scg\scg_ARP\test_c139585.py:29: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139585(browser):<br/>    <br/>    	try:<br/>    		mac1 = get_linux_host_mac_jyl(host_name=&quot;10.1.1.202&quot;, user=&quot;root&quot;, password=&quot;root&quot;, ip_add=&quot;20.1.1.2&quot;).lower()<br/>    		shell_cmd = Shell_SSH()<br/>    		shell_cmd.connect(hostip=&quot;10.1.1.202&quot;, name=&quot;root&quot;, passwd=&quot;root&quot;)<br/>    		shell_cmd.ping(ipadd=&quot;20.1.1.1&quot;)<br/>    		shell_cmd.close()<br/>    		login_web(browser, url=dev1)<br/>    		arp_list = get_dynamic_arp_all(browser)<br/>    		# print(arp_list)<br/>    		try:<br/>    			assert [&#x27;20.1.1.2&#x27;, mac1, interface_name_4, &#x27;&#x27;] in arp_list<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>&gt;   			assert [&#x27;20.1.1.2&#x27;, mac1, interface_name_4, &#x27;&#x27;] in arp_list<br/><span class="error">E      AssertionError: assert [&#x27;20.1.1.2&#x27;, &#x27;00:0c:29:7b:ff:7c&#x27;, &#x27;ge0/4&#x27;, &#x27;&#x27;] in [[&#x27;10.2.2.1&#x27;, &#x27;00:16:31:e5:7a:23&#x27;, &#x27;ge0/1&#x27;, &#x27;&#x27;], [&#x27;20.1.1.3&#x27;, &#x27;00:0c:29:7b:ff:7c&#x27;, &#x27;ge0/4&#x27;, &#x27;&#x27;]]</span><br/><br/>test_case\scg\scg_ARP\test_c139585.py:35: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139585(browser):<br/>    <br/>    	try:<br/>    		mac1 = get_linux_host_mac_jyl(host_name=&quot;10.1.1.202&quot;, user=&quot;root&quot;, password=&quot;root&quot;, ip_add=&quot;20.1.1.2&quot;).lower()<br/>    		shell_cmd = Shell_SSH()<br/>    		shell_cmd.connect(hostip=&quot;10.1.1.202&quot;, name=&quot;root&quot;, passwd=&quot;root&quot;)<br/>    		shell_cmd.ping(ipadd=&quot;20.1.1.1&quot;)<br/>    		shell_cmd.close()<br/>    		login_web(browser, url=dev1)<br/>    		arp_list = get_dynamic_arp_all(browser)<br/>    		# print(arp_list)<br/>    		try:<br/>    			assert [&#x27;20.1.1.2&#x27;, mac1, interface_name_4, &#x27;&#x27;] in arp_list<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert [&#x27;20.1.1.2&#x27;, mac1, interface_name_4, &#x27;&#x27;] in arp_list<br/>    <br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>    		# reload(hostip=dev1)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_ARP\test_c139585.py:43: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-time">2020-03-04 20:31:33.080961</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139682.py::test_c139682</td>
+          <td>None</td>
+          <td class="col-duration">173.99</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139682(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		# print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;block&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		# print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		# print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;en\r\nping 12.1.1.2\r\nBSAFE&gt;en\r\nBSAFE#ping 12.1.1.2\r\npval.type_str ping\r\nPING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\r\nexit\r\n&#x27;</span><br/><br/>test_case\scg\scg_ARP\test_c139682.py:95: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139682(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		# print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;block&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		# print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		# print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;en\r\nping 12.1.1.2\r\nBSAFE&gt;en\r\nBSAFE#ping 12.1.1.2\r\npval.type_str ping\r\nPING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\r\nexit\r\n&#x27;</span><br/><br/>test_case\scg\scg_ARP\test_c139682.py:103: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139682(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		# print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;block&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		# print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		# print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>    		reload(hostip=[dev1, dev2, dev3])<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_ARP\test_c139682.py:110: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-time">2020-03-04 20:37:38.133840</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139683.py::test_c139683</td>
+          <td>None</td>
+          <td class="col-duration">182.94</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139683(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.5 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result4 = a.output()<br/>    		print(result4)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.5&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 24&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;en\r\nping 12.1.1.2\r\nBSAFE&gt;en\r\nBSAFE#ping 12.1.1.2\r\npval.type_str ping\r\nPING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\r\nexit\r\n&#x27;</span><br/><br/>test_case\scg\scg_ARP\test_c139683.py:118: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139683(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.5 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result4 = a.output()<br/>    		print(result4)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.5&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 24&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			assert &quot;ms&quot; in result4<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;en\r\nping 12.1.1.2\r\nBSAFE&gt;en\r\nBSAFE#ping 12.1.1.2\r\npval.type_str ping\r\nPING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\r\nexit\r\n&#x27;</span><br/><br/>test_case\scg\scg_ARP\test_c139683.py:127: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139683(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.5 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result4 = a.output()<br/>    		print(result4)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.5&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 24&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			assert &quot;ms&quot; in result4<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			assert &quot;ms&quot; in result4<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>    		reload(hostip=[dev1, dev2, dev3])<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_ARP\test_c139683.py:135: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-time">2020-03-04 20:43:44.099772</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139684.py::test_c139684</td>
+          <td>None</td>
+          <td class="col-duration">183.19</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139684(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;block&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.5 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result4 = a.output()<br/>    		print(result4)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.5&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 24&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;en\r\nping 12.1.1.2\r\nBSAFE&gt;en\r\nBSAFE#ping 12.1.1.2\r\npval.type_str ping\r\nPING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\r\nexit\r\n&#x27;</span><br/><br/>test_case\scg\scg_ARP\test_c139684.py:118: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139684(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;block&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.5 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result4 = a.output()<br/>    		print(result4)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.5&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 24&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			assert &quot;Unreachable&quot; in result4<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;en\r\nping 12.1.1.2\r\nBSAFE&gt;en\r\nBSAFE#ping 12.1.1.2\r\npval.type_str ping\r\nPING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\r\nexit\r\n&#x27;</span><br/><br/>test_case\scg\scg_ARP\test_c139684.py:127: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139684(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;block&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.5 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result4 = a.output()<br/>    		print(result4)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.5&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 24&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			assert &quot;Unreachable&quot; in result4<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			assert &quot;Unreachable&quot; in result4<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>    		reload(hostip=[dev1, dev2, dev3])<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_ARP\test_c139684.py:135: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-04 19:36:48.707105</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139585.py::test_c139585</td>
+          <td>None</td>
+          <td class="col-duration">17.69</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139585(browser):<br/>    <br/>    	try:<br/>    		mac1 = get_linux_host_mac_jyl(host_name=&quot;10.1.1.202&quot;, user=&quot;root&quot;, password=&quot;root&quot;, ip_add=&quot;20.1.1.2&quot;).lower()<br/>    		shell_cmd = Shell_SSH()<br/>    		shell_cmd.connect(hostip=&quot;10.1.1.202&quot;, name=&quot;root&quot;, passwd=&quot;root&quot;)<br/>    		shell_cmd.ping(ipadd=&quot;20.1.1.1&quot;)<br/>    		shell_cmd.close()<br/>    		login_web(browser, url=dev1)<br/>    		arp_list = get_dynamic_arp_all(browser)<br/>    		# print(arp_list)<br/>    		try:<br/>&gt;   			assert [&#x27;20.1.1.2&#x27;, mac1, interface_name_4, &#x27;&#x27;] in arp_list<br/><span class="error">E      AssertionError: assert [&#x27;20.1.1.2&#x27;, &#x27;00:0c:29:7b:ff:7c&#x27;, &#x27;ge0/4&#x27;, &#x27;&#x27;] in [[&#x27;10.2.2.1&#x27;, &#x27;00:16:31:e5:7a:23&#x27;, &#x27;ge0/1&#x27;, &#x27;&#x27;], [&#x27;20.1.1.3&#x27;, &#x27;00:0c:29:7b:ff:7c&#x27;, &#x27;ge0/4&#x27;, &#x27;&#x27;]]</span><br/><br/>test_case\scg\scg_ARP\test_c139585.py:29: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139585(browser):<br/>    <br/>    	try:<br/>    		mac1 = get_linux_host_mac_jyl(host_name=&quot;10.1.1.202&quot;, user=&quot;root&quot;, password=&quot;root&quot;, ip_add=&quot;20.1.1.2&quot;).lower()<br/>    		shell_cmd = Shell_SSH()<br/>    		shell_cmd.connect(hostip=&quot;10.1.1.202&quot;, name=&quot;root&quot;, passwd=&quot;root&quot;)<br/>    		shell_cmd.ping(ipadd=&quot;20.1.1.1&quot;)<br/>    		shell_cmd.close()<br/>    		login_web(browser, url=dev1)<br/>    		arp_list = get_dynamic_arp_all(browser)<br/>    		# print(arp_list)<br/>    		try:<br/>    			assert [&#x27;20.1.1.2&#x27;, mac1, interface_name_4, &#x27;&#x27;] in arp_list<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>&gt;   			assert [&#x27;20.1.1.2&#x27;, mac1, interface_name_4, &#x27;&#x27;] in arp_list<br/><span class="error">E      AssertionError: assert [&#x27;20.1.1.2&#x27;, &#x27;00:0c:29:7b:ff:7c&#x27;, &#x27;ge0/4&#x27;, &#x27;&#x27;] in [[&#x27;10.2.2.1&#x27;, &#x27;00:16:31:e5:7a:23&#x27;, &#x27;ge0/1&#x27;, &#x27;&#x27;], [&#x27;20.1.1.3&#x27;, &#x27;00:0c:29:7b:ff:7c&#x27;, &#x27;ge0/4&#x27;, &#x27;&#x27;]]</span><br/><br/>test_case\scg\scg_ARP\test_c139585.py:35: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139585(browser):<br/>    <br/>    	try:<br/>    		mac1 = get_linux_host_mac_jyl(host_name=&quot;10.1.1.202&quot;, user=&quot;root&quot;, password=&quot;root&quot;, ip_add=&quot;20.1.1.2&quot;).lower()<br/>    		shell_cmd = Shell_SSH()<br/>    		shell_cmd.connect(hostip=&quot;10.1.1.202&quot;, name=&quot;root&quot;, passwd=&quot;root&quot;)<br/>    		shell_cmd.ping(ipadd=&quot;20.1.1.1&quot;)<br/>    		shell_cmd.close()<br/>    		login_web(browser, url=dev1)<br/>    		arp_list = get_dynamic_arp_all(browser)<br/>    		# print(arp_list)<br/>    		try:<br/>    			assert [&#x27;20.1.1.2&#x27;, mac1, interface_name_4, &#x27;&#x27;] in arp_list<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert [&#x27;20.1.1.2&#x27;, mac1, interface_name_4, &#x27;&#x27;] in arp_list<br/>    <br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>    		# reload(hostip=dev1)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_ARP\test_c139585.py:43: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-04 20:28:39.040006</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139682.py::test_c139682</td>
+          <td>None</td>
+          <td class="col-duration">176.46</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139682(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		# print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;block&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		# print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		# print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;en\r\nping 12.1.1.2\r\nBSAFE&gt;en\r\nBSAFE#ping 12.1.1.2\r\npval.type_str ping\r\nPING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\r\nexit\r\n&#x27;</span><br/><br/>test_case\scg\scg_ARP\test_c139682.py:95: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139682(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		# print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;block&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		# print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		# print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;en\r\nping 12.1.1.2\r\nBSAFE&gt;en\r\nBSAFE#ping 12.1.1.2\r\npval.type_str ping\r\nPING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\r\nexit\r\n&#x27;</span><br/><br/>test_case\scg\scg_ARP\test_c139682.py:103: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139682(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		# print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;block&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		# print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		# print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>    		reload(hostip=[dev1, dev2, dev3])<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_ARP\test_c139682.py:110: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-04 20:34:35.131373</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139683.py::test_c139683</td>
+          <td>None</td>
+          <td class="col-duration">182.00</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139683(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.5 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result4 = a.output()<br/>    		print(result4)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.5&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 24&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;en\r\nping 12.1.1.2\r\nBSAFE&gt;en\r\nBSAFE#ping 12.1.1.2\r\npval.type_str ping\r\nPING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\r\nexit\r\n&#x27;</span><br/><br/>test_case\scg\scg_ARP\test_c139683.py:118: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139683(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.5 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result4 = a.output()<br/>    		print(result4)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.5&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 24&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			assert &quot;ms&quot; in result4<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;en\r\nping 12.1.1.2\r\nBSAFE&gt;en\r\nBSAFE#ping 12.1.1.2\r\npval.type_str ping\r\nPING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\r\nexit\r\n&#x27;</span><br/><br/>test_case\scg\scg_ARP\test_c139683.py:127: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139683(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.5 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result4 = a.output()<br/>    		print(result4)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.5&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 24&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			assert &quot;ms&quot; in result4<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			assert &quot;ms&quot; in result4<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>    		reload(hostip=[dev1, dev2, dev3])<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_ARP\test_c139683.py:135: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-03-04 20:40:40.854291</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139684.py::test_c139684</td>
+          <td>None</td>
+          <td class="col-duration">182.67</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139684(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;block&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.5 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result4 = a.output()<br/>    		print(result4)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.5&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 24&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;en\r\nping 12.1.1.2\r\nBSAFE&gt;en\r\nBSAFE#ping 12.1.1.2\r\npval.type_str ping\r\nPING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\r\nexit\r\n&#x27;</span><br/><br/>test_case\scg\scg_ARP\test_c139684.py:118: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139684(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;block&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.5 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result4 = a.output()<br/>    		print(result4)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.5&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 24&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			assert &quot;Unreachable&quot; in result4<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>&gt;   			assert &quot;ms&quot; in result3<br/><span class="error">E      AssertionError: assert &#x27;ms&#x27; in &#x27;en\r\nping 12.1.1.2\r\nBSAFE&gt;en\r\nBSAFE#ping 12.1.1.2\r\npval.type_str ping\r\nPING 12.1.1.2 100 bytes of data 5 times(timeout is 2 seconds):\r\nPing 12.1.1.2 icmp_seq=1  Destination Host Unreachable\r\nexit\r\n&#x27;</span><br/><br/>test_case\scg\scg_ARP\test_c139684.py:127: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;70d8cb68f07c4e4f020ea4150e5bc197&quot;)&gt;<br/><br/>    def test_c139684(browser):<br/>    <br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result1 = a.output()<br/>    		print(result1)<br/>    <br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;enable&quot;,<br/>    									 policy_for_undefined_host=&quot;block&quot;)<br/>    		add_ip_mac_binding_jyl(browser, ip=&quot;13.1.1.3&quot;, interface=interface_name_3, mac_add=&quot;auto_mac&quot;,<br/>    							   host_name=&quot;manual_host&quot;, host=&quot;主机83&quot;)<br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:89:ee:03:69&quot;)<br/>    <br/>    		del_dynamic_arp(browser, index_list=&quot;all&quot;)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result2 = a.output()<br/>    		print(result2)<br/>    <br/>    		edit_ip_mac_banding_jyl(browser, banding_ip=&quot;13.1.1.3&quot;, ip=&quot;13.1.1.3&quot;, interface=interface_name_3,<br/>    								mac_add=&quot;manual_mac&quot;, mac=&quot;00:16:31:ee:03:23&quot;)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result3 = a.output()<br/>    		print(result3)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.3&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.5 24&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;ping 12.1.1.2&quot;)<br/>    		time.sleep(3)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		result4 = a.output()<br/>    		print(result4)<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev3)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 12.1.1.0/24 gateway 13.1.1.1&quot;)<br/>    		a.execute(&quot;interface gigabitethernet &quot;+interface_name_2)<br/>    		a.execute(&quot;no ip address 13.1.1.5&quot;)<br/>    		a.execute(&quot;ip address 13.1.1.3 24&quot;)<br/>    		a.close()<br/>    <br/>    		a = Shell_SSH()<br/>    		a.connect(dev2)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no ip route 13.1.1.0/24 gateway 12.1.1.1&quot;)<br/>    		a.close()<br/>    		del_bindinglist(browser, index_list=&quot;all&quot;)<br/>    		del_static_arp(browser, index_list=&quot;all&quot;)<br/>    		edit_ip_mac_binding_rule_jyl(browser, interface=interface_name_3, source_mac_binding=&quot;disenable&quot;,<br/>    									 policy_for_undefined_host=&quot;allow&quot;)<br/>    		try:<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			assert &quot;Unreachable&quot; in result4<br/>    			rail_pass(test_run_id, test_id)<br/>    <br/>    		except Exception as err1:<br/>    			print(err1)<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;ms&quot; in result1<br/>    			assert &quot;Unreachable&quot; in result2<br/>    			assert &quot;ms&quot; in result3<br/>    			assert &quot;Unreachable&quot; in result4<br/>    <br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		rail_fail(test_run_id, test_id)<br/>    		reload(hostip=[dev1, dev2, dev3])<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_ARP\test_c139684.py:135: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:36:30.977091</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139584.py::test_c139584</td>
+          <td>None</td>
+          <td class="col-duration">9.82</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:37:51.258683</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139586.py::test_c139586</td>
+          <td>None</td>
+          <td class="col-duration">44.87</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:38:45.498785</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139587.py::test_c139587</td>
+          <td>None</td>
+          <td class="col-duration">54.24</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:39:34.573592</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139588.py::test_c139588</td>
+          <td>None</td>
+          <td class="col-duration">49.07</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:40:49.259864</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139589.py::test_c139589</td>
+          <td>None</td>
+          <td class="col-duration">74.68</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:41:40.804812</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139590.py::test_c139590</td>
+          <td>None</td>
+          <td class="col-duration">51.54</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:41:57.370760</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139591.py::test_c139591</td>
+          <td>None</td>
+          <td class="col-duration">16.56</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:42:37.554058</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139592.py::test_c139592</td>
+          <td>None</td>
+          <td class="col-duration">40.18</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:43:51.118266</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139593.py::test_c139593</td>
+          <td>None</td>
+          <td class="col-duration">73.56</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:44:55.204931</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139594.py::test_c139594</td>
+          <td>None</td>
+          <td class="col-duration">64.08</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:45:11.830882</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139595.py::test_c139595</td>
+          <td>None</td>
+          <td class="col-duration">16.62</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:45:44.268737</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139596.py::test_c139596</td>
+          <td>None</td>
+          <td class="col-duration">32.43</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:46:54.153735</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139597.py::test_c139597</td>
+          <td>None</td>
+          <td class="col-duration">69.88</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:47:46.232713</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139598.py::test_c139598</td>
+          <td>None</td>
+          <td class="col-duration">52.07</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:48:57.737803</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139599.py::test_c139599</td>
+          <td>None</td>
+          <td class="col-duration">71.50</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:49:20.624112</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139600.py::test_c139600</td>
+          <td>None</td>
+          <td class="col-duration">22.88</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:49:40.527251</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139606.py::test_c139606</td>
+          <td>None</td>
+          <td class="col-duration">19.90</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:50:21.821613</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139607.py::test_c139607</td>
+          <td>None</td>
+          <td class="col-duration">41.29</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:50:42.779811</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139608.py::test_c139608</td>
+          <td>None</td>
+          <td class="col-duration">20.96</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:51:26.431308</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139609.py::test_c139609</td>
+          <td>None</td>
+          <td class="col-duration">43.65</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:52:19.137323</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139610.py::test_c139610</td>
+          <td>None</td>
+          <td class="col-duration">52.70</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:53:05.777990</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139611.py::test_c139611</td>
+          <td>None</td>
+          <td class="col-duration">46.64</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:53:24.021034</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139612.py::test_c139612</td>
+          <td>None</td>
+          <td class="col-duration">18.24</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:54:15.440975</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139613.py::test_c139613</td>
+          <td>None</td>
+          <td class="col-duration">51.42</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:55:48.479296</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139614.py::test_c139614</td>
+          <td>None</td>
+          <td class="col-duration">93.03</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:56:28.455583</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139616.py::test_c139616</td>
+          <td>None</td>
+          <td class="col-duration">39.97</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:57:07.672826</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139617.py::test_c139617</td>
+          <td>None</td>
+          <td class="col-duration">39.21</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:58:27.314381</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139618.py::test_c139618</td>
+          <td>None</td>
+          <td class="col-duration">79.64</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 19:59:20.831442</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139619.py::test_c139619</td>
+          <td>None</td>
+          <td class="col-duration">53.51</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:00:07.341102</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139620.py::test_c139620</td>
+          <td>None</td>
+          <td class="col-duration">46.50</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:01:03.740328</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139621.py::test_c139621</td>
+          <td>None</td>
+          <td class="col-duration">56.40</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:01:12.762844</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139622.py::test_c139622</td>
+          <td>None</td>
+          <td class="col-duration">9.02</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:01:30.524860</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139623.py::test_c139623</td>
+          <td>None</td>
+          <td class="col-duration">17.76</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:01:47.766846</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139624.py::test_c139624</td>
+          <td>None</td>
+          <td class="col-duration">17.24</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:02:05.647869</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139625.py::test_c139625</td>
+          <td>None</td>
+          <td class="col-duration">17.88</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:02:23.387884</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139626.py::test_c139626</td>
+          <td>None</td>
+          <td class="col-duration">17.74</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:02:42.666986</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139627.py::test_c139627</td>
+          <td>None</td>
+          <td class="col-duration">19.28</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:03:08.845484</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139628.py::test_c139628</td>
+          <td>None</td>
+          <td class="col-duration">26.17</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:03:20.484150</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139629.py::test_c139629</td>
+          <td>None</td>
+          <td class="col-duration">11.63</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:03:32.225821</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139630.py::test_c139630</td>
+          <td>None</td>
+          <td class="col-duration">11.74</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:03:43.978493</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139631.py::test_c139631</td>
+          <td>None</td>
+          <td class="col-duration">11.75</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:03:55.869173</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139632.py::test_c139632</td>
+          <td>None</td>
+          <td class="col-duration">11.89</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:04:07.736852</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139633.py::test_c139633</td>
+          <td>None</td>
+          <td class="col-duration">11.86</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:04:16.352345</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139634.py::test_c139634</td>
+          <td>None</td>
+          <td class="col-duration">8.61</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:04:25.321858</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139635.py::test_c139635</td>
+          <td>None</td>
+          <td class="col-duration">8.97</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:04:33.881348</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139636.py::test_c139636</td>
+          <td>None</td>
+          <td class="col-duration">8.56</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:04:48.250169</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139637.py::test_c139637</td>
+          <td>None</td>
+          <td class="col-duration">14.36</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:05:14.774687</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139642.py::test_c139642</td>
+          <td>None</td>
+          <td class="col-duration">26.52</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:05:40.857178</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139643.py::test_c139643</td>
+          <td>None</td>
+          <td class="col-duration">26.08</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:06:04.373523</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139644.py::test_c139644</td>
+          <td>None</td>
+          <td class="col-duration">23.51</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:07:13.194460</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139645.py::test_c139645</td>
+          <td>None</td>
+          <td class="col-duration">68.82</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:07:50.484593</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139646.py::test_c139646</td>
+          <td>None</td>
+          <td class="col-duration">37.29</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:08:27.580714</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139647.py::test_c139647</td>
+          <td>None</td>
+          <td class="col-duration">37.09</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:08:59.079516</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139648.py::test_c139648</td>
+          <td>None</td>
+          <td class="col-duration">31.50</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:09:30.486312</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139649.py::test_c139649</td>
+          <td>None</td>
+          <td class="col-duration">31.40</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:10:12.106693</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139650.py::test_c139650</td>
+          <td>None</td>
+          <td class="col-duration">41.61</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:10:22.932312</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139651.py::test_c139651</td>
+          <td>None</td>
+          <td class="col-duration">10.82</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:10:42.420427</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139652.py::test_c139652</td>
+          <td>None</td>
+          <td class="col-duration">19.48</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:11:00.088437</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139653.py::test_c139653</td>
+          <td>None</td>
+          <td class="col-duration">17.66</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:11:35.441459</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139654.py::test_c139654</td>
+          <td>None</td>
+          <td class="col-duration">35.35</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:12:17.785881</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139655.py::test_c139655</td>
+          <td>None</td>
+          <td class="col-duration">42.34</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:12:42.633303</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139656.py::test_c139656</td>
+          <td>None</td>
+          <td class="col-duration">24.84</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:13:25.418750</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139657.py::test_c139657</td>
+          <td>None</td>
+          <td class="col-duration">42.78</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:14:01.901837</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139658.py::test_c139658</td>
+          <td>None</td>
+          <td class="col-duration">36.48</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:14:47.892467</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139661.py::test_c139661</td>
+          <td>None</td>
+          <td class="col-duration">45.99</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:15:38.005333</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139662.py::test_c139662</td>
+          <td>None</td>
+          <td class="col-duration">50.11</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:16:30.863357</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139663.py::test_c139663</td>
+          <td>None</td>
+          <td class="col-duration">52.85</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:17:22.683321</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139664.py::test_c139664</td>
+          <td>None</td>
+          <td class="col-duration">51.81</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:18:27.992056</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139665.py::test_c139665</td>
+          <td>None</td>
+          <td class="col-duration">65.30</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:19:37.017004</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139666.py::test_c139666</td>
+          <td>None</td>
+          <td class="col-duration">69.02</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:20:33.488234</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139667.py::test_c139667</td>
+          <td>None</td>
+          <td class="col-duration">56.47</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:21:09.268280</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139672.py::test_c139672</td>
+          <td>None</td>
+          <td class="col-duration">35.78</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:22:33.016071</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139673.py::test_c139673</td>
+          <td>None</td>
+          <td class="col-duration">83.74</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:23:08.557103</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139674.py::test_c139674</td>
+          <td>None</td>
+          <td class="col-duration">35.54</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:23:28.144224</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139675.py::test_c139675</td>
+          <td>None</td>
+          <td class="col-duration">19.58</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:24:24.922471</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139680.py::test_c139680</td>
+          <td>None</td>
+          <td class="col-duration">56.77</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:25:42.535910</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139681.py::test_c139681</td>
+          <td>None</td>
+          <td class="col-duration">77.61</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:44:40.880020</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139685.py::test_c139685</td>
+          <td>None</td>
+          <td class="col-duration">56.78</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:45:29.574805</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139689.py::test_c139689</td>
+          <td>None</td>
+          <td class="col-duration">48.69</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:46:11.790220</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139690.py::test_c139690</td>
+          <td>None</td>
+          <td class="col-duration">42.21</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:46:52.525550</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139691.py::test_c139691</td>
+          <td>None</td>
+          <td class="col-duration">40.73</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:47:34.610957</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139694.py::test_c139694</td>
+          <td>None</td>
+          <td class="col-duration">42.08</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:48:18.034441</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139695.py::test_c139695</td>
+          <td>None</td>
+          <td class="col-duration">43.42</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:48:40.349717</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139696.py::test_c139696</td>
+          <td>None</td>
+          <td class="col-duration">22.31</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:49:10.667451</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139697.py::test_c139697</td>
+          <td>None</td>
+          <td class="col-duration">30.31</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:49:38.245028</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139707.py::test_c139707</td>
+          <td>None</td>
+          <td class="col-duration">27.57</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:50:16.712229</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139708.py::test_c139708</td>
+          <td>None</td>
+          <td class="col-duration">38.46</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:50:55.366439</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139709.py::test_c139709</td>
+          <td>None</td>
+          <td class="col-duration">38.65</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:51:05.988047</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139712.py::test_c139712</td>
+          <td>None</td>
+          <td class="col-duration">10.62</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:51:22.965018</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139713.py::test_c139713</td>
+          <td>None</td>
+          <td class="col-duration">16.97</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:51:59.954134</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139715.py::test_c139715</td>
+          <td>None</td>
+          <td class="col-duration">36.99</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:53:33.336475</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139716.py::test_c139716</td>
+          <td>None</td>
+          <td class="col-duration">93.38</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:55:03.483631</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139718.py::test_c139718</td>
+          <td>None</td>
+          <td class="col-duration">90.14</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:56:42.715307</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139719.py::test_c139719</td>
+          <td>None</td>
+          <td class="col-duration">99.23</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-03-04 20:57:08.610788</td>
+          <td class="col-name">test_case/scg/scg_ARP/test_c139720.py::test_c139720</td>
+          <td>None</td>
+          <td class="col-duration">23.38</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>

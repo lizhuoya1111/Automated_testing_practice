@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <style>body {
+	font-family: Helvetica, Arial, sans-serif;
+	font-size: 12px;
+	min-width: 1200px;
+	color: #999;
+}
+
+h1 {
+	font-size: 24px;
+	color: black;
+}
+
+h2 {
+	font-size: 16px;
+	color: black;
+}
+
+p {
+    color: black;
+}
+
+a {
+	color: #999;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+
+#environment td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+}
+
+#environment tr:nth-child(odd) {
+	background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed, .passed .col-result {
+	color: green;
+}
+span.skipped, span.xfailed, span.rerun, .skipped .col-result, .xfailed .col-result, .rerun .col-result {
+	color: orange;
+}
+span.error, span.failed, span.xpassed, .error .col-result, .failed .col-result, .xpassed .col-result  {
+	color: red;
+}
+
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+
+#results-table {
+	border: 1px solid #e6e6e6;
+	color: #999;
+	font-size: 12px;
+	width: 100%
+}
+
+#results-table th, #results-table td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+	text-align: left
+}
+#results-table th {
+	font-weight: bold
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+
+.log:only-child {
+	height: inherit
+}
+.log {
+	background-color: #e6e6e6;
+	border: 1px solid #e6e6e6;
+	color: black;
+	display: block;
+	font-family: "Courier New", Courier, monospace;
+	height: 230px;
+	overflow-y: scroll;
+	padding: 5px;
+	white-space: pre-wrap
+}
+div.image {
+	border: 1px solid #e6e6e6;
+	float: right;
+	height: 240px;
+	margin-left: 5px;
+	overflow: hidden;
+	width: 320px
+}
+div.image img {
+	width: 320px
+}
+.collapsed {
+	display: none;
+}
+.expander::after {
+	content: " (show details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+.collapser::after {
+	content: " (hide details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+	cursor: pointer;
+}
+
+.sort-icon {
+	font-size: 0px;
+	float: left;
+	margin-right: 5px;
+	margin-top: 5px;
+	/*triangle*/
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+}
+
+.inactive .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #E6E6E6;
+}
+
+.asc.active .sort-icon {
+	/*finish triangle*/
+	border-bottom: 8px solid #999;
+}
+
+.desc.active .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>2020-02-28_14_44_11OSPF_report.html</h1>
+    <p>Report generated on 28-Feb-2020 at 15:04:31 by<a href="https://pypi.python.org/pypi/pytest-html"> pytest-html</a> v1.19.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;3.6.3&apos;, &apos;py&apos;: &apos;1.8.0&apos;, &apos;pluggy&apos;: &apos;0.6.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-7-6.1.7601-SP1</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;rerunfailures&apos;: &apos;4.1&apos;, &apos;metadata&apos;: &apos;1.8.0&apos;, &apos;html&apos;: &apos;1.19.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.0</td></tr></table>
+    <h2>Summary</h2>
+    <p>40 tests ran in 1219.63 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">38 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">2 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">3 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable time" col="time">Time</th>
+          <th class="sortable" col="name">Test</th>
+          <th>Description</th>
+          <th class="sortable numeric" col="duration">Duration</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="5">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-time">2020-02-28 06:49:22.175407</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140790.py::test_c140790</td>
+          <td>None</td>
+          <td class="col-duration">9.24</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/><br/>    def test_c140790(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		start_ospf_jyl(browser)<br/>    		time.sleep(0.5)<br/>&gt;   		add_ospf_network_jyl(browser, network=&quot;192.165.12.3&quot;, mask=&quot;24&quot;, area_id=&quot;45&quot;, save=&quot;yes&quot;)<br/><br/>test_case\scg\scg_OSPF\test_c140790.py:24: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/>network = &#x27;192.165.12.3&#x27;, mask = &#x27;24&#x27;, area_id = &#x27;45&#x27;, save = &#x27;yes&#x27;, cancel = &#x27;&#x27;<br/><br/>    def add_ospf_network_jyl(browser, network=&quot;&quot;, mask=&quot;&quot;, area_id=&quot;&quot;, save=&quot;&quot;, cancel=&quot;&quot;):<br/>    	into_fun(browser, OSPF)<br/>    	# 点击网络<br/>    	time.sleep(0.5)<br/>&gt;   	browser.find_element_by_xpath(&#x27;//*[@id=&quot;tabs&quot;]/li[3]/a/span&#x27;).click()<br/><br/>page_obj\scg\scg_def_ospf.py:168: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/>xpath = &#x27;//*[@id=&quot;tabs&quot;]/li[3]/a/span&#x27;<br/><br/>    def find_element_by_xpath(self, xpath):<br/>        &quot;&quot;&quot;<br/>            Finds an element by xpath.<br/>    <br/>            :Args:<br/>             - xpath - The xpath locator of the element to find.<br/>    <br/>            :Returns:<br/>             - WebElement - the element if it was found<br/>    <br/>            :Raises:<br/>             - NoSuchElementException - if the element wasn&#x27;t found<br/>    <br/>            :Usage:<br/>                element = driver.find_element_by_xpath(&#x27;//div/td[1]&#x27;)<br/>            &quot;&quot;&quot;<br/>&gt;       return self.find_element(by=By.XPATH, value=xpath)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:393: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/>by = &#x27;xpath&#x27;, value = &#x27;//*[@id=&quot;tabs&quot;]/li[3]/a/span&#x27;<br/><br/>    def find_element(self, by=By.ID, value=None):<br/>        &quot;&quot;&quot;<br/>            Find an element given a By strategy and locator. Prefer the find_element_by_* methods when<br/>            possible.<br/>    <br/>            :Usage:<br/>                element = driver.find_element(By.ID, &#x27;foo&#x27;)<br/>    <br/>            :rtype: WebElement<br/>            &quot;&quot;&quot;<br/>        if self.w3c:<br/>            if by == By.ID:<br/>                by = By.CSS_SELECTOR<br/>                value = &#x27;[id=&quot;%s&quot;]&#x27; % value<br/>            elif by == By.TAG_NAME:<br/>                by = By.CSS_SELECTOR<br/>            elif by == By.CLASS_NAME:<br/>                by = By.CSS_SELECTOR<br/>                value = &quot;.%s&quot; % value<br/>            elif by == By.NAME:<br/>                by = By.CSS_SELECTOR<br/>                value = &#x27;[name=&quot;%s&quot;]&#x27; % value<br/>        return self.execute(Command.FIND_ELEMENT, {<br/>            &#x27;using&#x27;: by,<br/>&gt;           &#x27;value&#x27;: value})[&#x27;value&#x27;]<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:966: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/>driver_command = &#x27;findElement&#x27;<br/>params = {&#x27;sessionId&#x27;: &#x27;67c614696551ce13ad3f2e623488b049&#x27;, &#x27;using&#x27;: &#x27;xpath&#x27;, &#x27;value&#x27;: &#x27;//*[@id=&quot;tabs&quot;]/li[3]/a/span&#x27;}<br/><br/>    def execute(self, driver_command, params=None):<br/>        &quot;&quot;&quot;<br/>            Sends a command to be executed by a command.CommandExecutor.<br/>    <br/>            :Args:<br/>             - driver_command: The name of the command to execute as a string.<br/>             - params: A dictionary of named parameters to send with the command.<br/>    <br/>            :Returns:<br/>              The command&#x27;s JSON response loaded into a dictionary object.<br/>            &quot;&quot;&quot;<br/>        if self.session_id is not None:<br/>            if not params:<br/>                params = {&#x27;sessionId&#x27;: self.session_id}<br/>            elif &#x27;sessionId&#x27; not in params:<br/>                params[&#x27;sessionId&#x27;] = self.session_id<br/>    <br/>        params = self._wrap_value(params)<br/>        response = self.command_executor.execute(driver_command, params)<br/>        if response:<br/>&gt;           self.error_handler.check_response(response)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:320: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x0000000005ABD898&gt;<br/>response = {&#x27;sessionId&#x27;: &#x27;67c614696551ce13ad3f2e623488b049&#x27;, &#x27;status&#x27;: 7, &#x27;value&#x27;: {&#x27;message&#x27;: &#x27;no such element: Unable to locate...r info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)&#x27;}}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>            Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>            :Args:<br/>             - response - The JSON response from the WebDriver server as a dictionary<br/>               object.<br/>    <br/>            :Raises: If the response contains an error message.<br/>            &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchElementException: Message: no such element: Unable to locate element: {&quot;method&quot;:&quot;xpath&quot;,&quot;selector&quot;:&quot;//*[@id=&quot;tabs&quot;]/li[3]/a/span&quot;}</span><br/><span class="error">E         (Session info: chrome=80.0.3987.122)</span><br/><span class="error">E         (Driver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)</span><br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\errorhandler.py:242: NoSuchElementException<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/><br/>    def test_c140790(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		start_ospf_jyl(browser)<br/>    		time.sleep(0.5)<br/>    		add_ospf_network_jyl(browser, network=&quot;192.165.12.3&quot;, mask=&quot;24&quot;, area_id=&quot;45&quot;, save=&quot;yes&quot;)<br/>    		edit_ospf_network_jyl(browser, ospf_neteork_ip=&quot;192.165.12.3&quot;, area_id=&quot;5.5.0.1&quot;, save=&quot;yes&quot;)<br/>    		loginfo1 = get_log_info(browser, 管理日志)<br/>    		delete_ospf_network_jyl(browser, ospf_neteork_ip=&quot;all&quot;)<br/>    		time.sleep(0.5)<br/>    		# print(loginfo1)<br/>    		stop_ospf_jyl(browser)<br/>    		try:<br/>    			assert &quot;成功添加&quot; in loginfo1<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;成功添加&quot; in loginfo1<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		# reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_OSPF\test_c140790.py:42: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-time">2020-02-28 06:53:46.368518</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140797.py::test_c140797</td>
+          <td>None</td>
+          <td class="col-duration">105.59</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/><br/>    def test_c140797(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		start_ospf_jyl(browser)<br/>    		time.sleep(0.5)<br/>    		web_info1 = get_ospf_interface_name_jyl(browser)<br/>    		print(web_info1)<br/>    		time.sleep(0.5)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		stop_ospf_jyl(browser)<br/>    		# 诊断错误！等待修改<br/>    		try:<br/>&gt;   			assert [&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;MGMT&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] \<br/>    				   and [&#x27;P1.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] in web_info1<br/><span class="error">E          AssertionError: assert ([&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;MGMT&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;P1.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] in [[&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/1&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/2&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/3&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/4&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/4.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], ...])</span><br/><br/>test_case\scg\scg_OSPF\test_c140797.py:43: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/><br/>    def test_c140797(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		start_ospf_jyl(browser)<br/>    		time.sleep(0.5)<br/>    		web_info1 = get_ospf_interface_name_jyl(browser)<br/>    		print(web_info1)<br/>    		time.sleep(0.5)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		stop_ospf_jyl(browser)<br/>    		# 诊断错误！等待修改<br/>    		try:<br/>    			assert [&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;MGMT&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] \<br/>    				   and [&#x27;P1.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] in web_info1<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>&gt;   			assert [&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;MGMT&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] \<br/>    				   and [&#x27;P1.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] in web_info1<br/><span class="error">E          AssertionError: assert ([&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;MGMT&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;P1.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] in [[&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/1&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/2&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/3&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/4&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/4.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], ...])</span><br/><br/>test_case\scg\scg_OSPF\test_c140797.py:48: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/><br/>    def test_c140797(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		start_ospf_jyl(browser)<br/>    		time.sleep(0.5)<br/>    		web_info1 = get_ospf_interface_name_jyl(browser)<br/>    		print(web_info1)<br/>    		time.sleep(0.5)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		stop_ospf_jyl(browser)<br/>    		# 诊断错误！等待修改<br/>    		try:<br/>    			assert [&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;MGMT&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] \<br/>    				   and [&#x27;P1.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] in web_info1<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert [&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;MGMT&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] \<br/>    				   and [&#x27;P1.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] in web_info1<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_OSPF\test_c140797.py:55: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-02-28 06:49:12.822873</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140790.py::test_c140790</td>
+          <td>None</td>
+          <td class="col-duration">11.29</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/><br/>    def test_c140790(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		start_ospf_jyl(browser)<br/>    		time.sleep(0.5)<br/>    		add_ospf_network_jyl(browser, network=&quot;192.165.12.3&quot;, mask=&quot;24&quot;, area_id=&quot;45&quot;, save=&quot;yes&quot;)<br/>&gt;   		edit_ospf_network_jyl(browser, ospf_neteork_ip=&quot;192.165.12.3&quot;, area_id=&quot;5.5.0.1&quot;, save=&quot;yes&quot;)<br/><br/>test_case\scg\scg_OSPF\test_c140790.py:25: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/>ospf_neteork_ip = &#x27;192.165.12.3&#x27;, network = &#x27;&#x27;, mask = &#x27;&#x27;, area_id = &#x27;5.5.0.1&#x27;<br/>save = &#x27;yes&#x27;, cancel = &#x27;&#x27;<br/><br/>    def edit_ospf_network_jyl(browser, ospf_neteork_ip=&quot;&quot;, network=&quot;&quot;, mask=&quot;&quot;, area_id=&quot;&quot;, save=&quot;&quot;, cancel=&quot;&quot;):<br/>    	# 点击网络<br/>&gt;   	browser.find_element_by_xpath(&#x27;//*[@id=&quot;tabs&quot;]/li[3]/a/span&#x27;).click()<br/><br/>page_obj\scg\scg_def_ospf.py:212: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/>xpath = &#x27;//*[@id=&quot;tabs&quot;]/li[3]/a/span&#x27;<br/><br/>    def find_element_by_xpath(self, xpath):<br/>        &quot;&quot;&quot;<br/>            Finds an element by xpath.<br/>    <br/>            :Args:<br/>             - xpath - The xpath locator of the element to find.<br/>    <br/>            :Returns:<br/>             - WebElement - the element if it was found<br/>    <br/>            :Raises:<br/>             - NoSuchElementException - if the element wasn&#x27;t found<br/>    <br/>            :Usage:<br/>                element = driver.find_element_by_xpath(&#x27;//div/td[1]&#x27;)<br/>            &quot;&quot;&quot;<br/>&gt;       return self.find_element(by=By.XPATH, value=xpath)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:393: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/>by = &#x27;xpath&#x27;, value = &#x27;//*[@id=&quot;tabs&quot;]/li[3]/a/span&#x27;<br/><br/>    def find_element(self, by=By.ID, value=None):<br/>        &quot;&quot;&quot;<br/>            Find an element given a By strategy and locator. Prefer the find_element_by_* methods when<br/>            possible.<br/>    <br/>            :Usage:<br/>                element = driver.find_element(By.ID, &#x27;foo&#x27;)<br/>    <br/>            :rtype: WebElement<br/>            &quot;&quot;&quot;<br/>        if self.w3c:<br/>            if by == By.ID:<br/>                by = By.CSS_SELECTOR<br/>                value = &#x27;[id=&quot;%s&quot;]&#x27; % value<br/>            elif by == By.TAG_NAME:<br/>                by = By.CSS_SELECTOR<br/>            elif by == By.CLASS_NAME:<br/>                by = By.CSS_SELECTOR<br/>                value = &quot;.%s&quot; % value<br/>            elif by == By.NAME:<br/>                by = By.CSS_SELECTOR<br/>                value = &#x27;[name=&quot;%s&quot;]&#x27; % value<br/>        return self.execute(Command.FIND_ELEMENT, {<br/>            &#x27;using&#x27;: by,<br/>&gt;           &#x27;value&#x27;: value})[&#x27;value&#x27;]<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:966: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/>driver_command = &#x27;findElement&#x27;<br/>params = {&#x27;sessionId&#x27;: &#x27;67c614696551ce13ad3f2e623488b049&#x27;, &#x27;using&#x27;: &#x27;xpath&#x27;, &#x27;value&#x27;: &#x27;//*[@id=&quot;tabs&quot;]/li[3]/a/span&#x27;}<br/><br/>    def execute(self, driver_command, params=None):<br/>        &quot;&quot;&quot;<br/>            Sends a command to be executed by a command.CommandExecutor.<br/>    <br/>            :Args:<br/>             - driver_command: The name of the command to execute as a string.<br/>             - params: A dictionary of named parameters to send with the command.<br/>    <br/>            :Returns:<br/>              The command&#x27;s JSON response loaded into a dictionary object.<br/>            &quot;&quot;&quot;<br/>        if self.session_id is not None:<br/>            if not params:<br/>                params = {&#x27;sessionId&#x27;: self.session_id}<br/>            elif &#x27;sessionId&#x27; not in params:<br/>                params[&#x27;sessionId&#x27;] = self.session_id<br/>    <br/>        params = self._wrap_value(params)<br/>        response = self.command_executor.execute(driver_command, params)<br/>        if response:<br/>&gt;           self.error_handler.check_response(response)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:320: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x0000000005ABD898&gt;<br/>response = {&#x27;sessionId&#x27;: &#x27;67c614696551ce13ad3f2e623488b049&#x27;, &#x27;status&#x27;: 7, &#x27;value&#x27;: {&#x27;message&#x27;: &#x27;no such element: Unable to locate...r info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)&#x27;}}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>            Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>            :Args:<br/>             - response - The JSON response from the WebDriver server as a dictionary<br/>               object.<br/>    <br/>            :Raises: If the response contains an error message.<br/>            &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchElementException: Message: no such element: Unable to locate element: {&quot;method&quot;:&quot;xpath&quot;,&quot;selector&quot;:&quot;//*[@id=&quot;tabs&quot;]/li[3]/a/span&quot;}</span><br/><span class="error">E         (Session info: chrome=80.0.3987.122)</span><br/><span class="error">E         (Driver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)</span><br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\errorhandler.py:242: NoSuchElementException<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/><br/>    def test_c140790(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		start_ospf_jyl(browser)<br/>    		time.sleep(0.5)<br/>    		add_ospf_network_jyl(browser, network=&quot;192.165.12.3&quot;, mask=&quot;24&quot;, area_id=&quot;45&quot;, save=&quot;yes&quot;)<br/>    		edit_ospf_network_jyl(browser, ospf_neteork_ip=&quot;192.165.12.3&quot;, area_id=&quot;5.5.0.1&quot;, save=&quot;yes&quot;)<br/>    		loginfo1 = get_log_info(browser, 管理日志)<br/>    		delete_ospf_network_jyl(browser, ospf_neteork_ip=&quot;all&quot;)<br/>    		time.sleep(0.5)<br/>    		# print(loginfo1)<br/>    		stop_ospf_jyl(browser)<br/>    		try:<br/>    			assert &quot;成功添加&quot; in loginfo1<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;成功添加&quot; in loginfo1<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		# reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_OSPF\test_c140790.py:42: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-02-28 06:52:00.748477</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140797.py::test_c140797</td>
+          <td>None</td>
+          <td class="col-duration">85.23</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/><br/>    def test_c140797(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		start_ospf_jyl(browser)<br/>    		time.sleep(0.5)<br/>    		web_info1 = get_ospf_interface_name_jyl(browser)<br/>    		print(web_info1)<br/>    		time.sleep(0.5)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		stop_ospf_jyl(browser)<br/>    		# 诊断错误！等待修改<br/>    		try:<br/>&gt;   			assert [&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;MGMT&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] \<br/>    				   and [&#x27;P1.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] in web_info1<br/><span class="error">E          AssertionError: assert ([&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;MGMT&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;P1.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] in [[&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/1&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/2&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/3&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/4&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/4.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], ...])</span><br/><br/>test_case\scg\scg_OSPF\test_c140797.py:43: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/><br/>    def test_c140797(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		start_ospf_jyl(browser)<br/>    		time.sleep(0.5)<br/>    		web_info1 = get_ospf_interface_name_jyl(browser)<br/>    		print(web_info1)<br/>    		time.sleep(0.5)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		stop_ospf_jyl(browser)<br/>    		# 诊断错误！等待修改<br/>    		try:<br/>    			assert [&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;MGMT&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] \<br/>    				   and [&#x27;P1.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] in web_info1<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>&gt;   			assert [&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;MGMT&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] \<br/>    				   and [&#x27;P1.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] in web_info1<br/><span class="error">E          AssertionError: assert ([&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;MGMT&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;P1.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] in [[&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/1&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/2&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/3&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/4&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], [&#x27;ge0/4.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;], ...])</span><br/><br/>test_case\scg\scg_OSPF\test_c140797.py:48: AssertionError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/><br/>    def test_c140797(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		start_ospf_jyl(browser)<br/>    		time.sleep(0.5)<br/>    		web_info1 = get_ospf_interface_name_jyl(browser)<br/>    		print(web_info1)<br/>    		time.sleep(0.5)<br/>    		a = Shell_SSH()<br/>    		a.connect(dev1)<br/>    		a.execute(&quot;en&quot;)<br/>    		a.execute(&quot;conf t&quot;)<br/>    		a.execute(&quot;no interface vlan &quot;+interface_name_4+&quot;.44&quot;)<br/>    		a.execute(&quot;exit&quot;)<br/>    		a.close()<br/>    		stop_ospf_jyl(browser)<br/>    		# 诊断错误！等待修改<br/>    		try:<br/>    			assert [&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;MGMT&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] \<br/>    				   and [&#x27;P1.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] in web_info1<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert [&#x27;br_0&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] and [&#x27;MGMT&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] \<br/>    				   and [&#x27;P1.44&#x27;, &#x27;1&#x27;, &#x27;10&#x27;, &#x27;40&#x27;, &#x27;none&#x27;] in web_info1<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_OSPF\test_c140797.py:55: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="rerun results-table-row">
+        <tr>
+          <td class="col-result">Rerun</td>
+          <td class="col-time">2020-02-28 06:59:57.544749</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140806.py::test_c140806</td>
+          <td>None</td>
+          <td class="col-duration">197.90</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/><br/>    def test_c140806(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		start_ospf_jyl(browser)<br/>    		time.sleep(0.5)<br/>    		edit_ospf_interface_jyl(browser, ospf_interface=&quot;br_0&quot;, auth_type=&quot;md5&quot;, message_digest_key=&quot;25&quot;, md5_key=&quot;12&quot;,<br/>    								save=&quot;yes&quot;)<br/>    		edit_ospf_interface_jyl(browser, ospf_interface=&quot;br_0&quot;, auth_type=&quot;简单密码&quot;, text_key=&quot;123456&quot;, save=&quot;yes&quot;)<br/>    		loginfo1 = get_log_info(browser, 管理日志)<br/>    		time.sleep(0.5)<br/>    		# print(loginfo1)<br/>    		edit_ospf_interface_jyl(browser, ospf_interface=&quot;br_0&quot;, priority=&quot;1&quot;, hello_interval=&quot;10&quot;, dead_interval=&quot;40&quot;,<br/>&gt;   								auth_type=&quot;无&quot;, save=&quot;yes&quot;)<br/><br/>test_case\scg\scg_OSPF\test_c140806.py:30: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/>ospf_interface = &#x27;br_0&#x27;, priority = &#x27;1&#x27;, hello_interval = &#x27;10&#x27;<br/>dead_interval = &#x27;40&#x27;, auth_type = &#x27;无&#x27;, message_digest_key = &#x27;&#x27;, md5_key = &#x27;&#x27;<br/>text_key = &#x27;&#x27;, save = &#x27;yes&#x27;, cancel = &#x27;&#x27;<br/><br/>    def edit_ospf_interface_jyl(browser, ospf_interface=&quot;&quot;, priority=&quot;1&quot;, hello_interval=&quot;10&quot;, dead_interval=&quot;40&quot;, auth_type=&quot;无&quot;,<br/>    							message_digest_key=&quot;&quot;, md5_key=&quot;&quot;, text_key=&quot;&quot;, save=&quot;&quot;, cancel=&quot;&quot;):<br/>&gt;   	into_fun(browser, OSPF)<br/><br/>page_obj\scg\scg_def_ospf.py:276: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/>menu = &#x27;route_ospf_status&#x27;<br/><br/>    def into_fun(browser, menu):<br/>    	if oem_name == &quot;ICF&quot;:<br/>    <br/>    		# print(&quot;进入ICF导航&quot;)<br/>    		try:<br/>    			# print(&quot;Alert exists&quot;)<br/>    			alert = browser.switch_to_alert()<br/>    			print(alert.text)<br/>    			alert.accept()<br/>    		except:<br/>    			# print(&quot;无警告，点击返回&quot;)<br/>    			try:<br/>    				browser.find_element_by_xpath(&#x27;// *[ @ id = &quot;link_but&quot;]&#x27;).click()<br/>    			except:<br/>    				# print(&quot;无点击返回&quot;)<br/>    				pass<br/>    		browser.switch_to.default_content()<br/>    		# 定位到左侧frame<br/>    		browser.switch_to.frame(&quot;lefttree&quot;)<br/>    <br/>    		if menu in [系统状态, 管理员, 系统升级, Web证书, 重启系统, 系统信息, 时间设定, DNS,<br/>    		            配置文件, 高可用性, SNMP设置, SNMP_Trap, 网络诊断, 服务器诊断]:<br/>    			browser.find_element_by_name(系统).click()<br/>    			if menu == 系统状态:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [管理员, 系统升级, Web证书, 重启系统]:<br/>    				if not browser.find_element_by_xpath(display_系统管理).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(系统管理).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [系统信息,  时间设定, DNS, 配置文件, 高可用性, SNMP设置, SNMP_Trap]:<br/>    				if not browser.find_element_by_xpath(display_配置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(配置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [网络诊断, 服务器诊断]:<br/>    				if not browser.find_element_by_xpath(display_诊断工具).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(诊断工具).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [物理接口, 子接口, 网桥, 静态路由, 策略路由, OSPF, ISP自动选择, 多网关组, 路由监控, DHCP设定, DHCP租用列表,<br/>    		              ARP列表, 桥MAC表, IPv6邻居列表, IPv6隧道]:<br/>    			browser.find_element_by_name(网络).click()<br/>    			if menu in [物理接口, 子接口, 网桥]:<br/>    				if not browser.find_element_by_xpath(display_接口设置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(接口设置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [静态路由, 策略路由, OSPF, ISP自动选择, 多网关组, 路由监控]:<br/>    				if not browser.find_element_by_xpath(display_路由).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(路由).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [DHCP设定, DHCP租用列表]:<br/>    				if not browser.find_element_by_xpath(display_DHCP).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(DHCP).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [ARP列表, 桥MAC表, IPv6邻居列表, IPv6隧道]:<br/>    				if not browser.find_element_by_xpath(display_MAC).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(MAC).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [模式切换, 自定义规则, 机器学习, 安全事件, 工业漏洞, ARP防护, 访问策略, IPV6访问策略, 地址, 地址范围,<br/>    		              地址组, IPv6地址, IPv6地址范围, IPv6地址组, 计划任务, 区域, 预定义服务, 自定义服务, 服务组, 目标地址转换,<br/>    		              源地址转换, 负载均衡]:<br/>    			browser.find_element_by_name(安全策略).click()<br/>    			if menu in [模式切换, 自定义规则, 机器学习, 安全事件, 工业漏洞, ARP防护, 访问策略, IPV6访问策略]:<br/>    				if not browser.find_element_by_xpath(display_工业防护策略).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(工业防护策略).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [地址, 地址范围, 地址组, IPv6地址, IPv6地址范围, IPv6地址组, 计划任务, 区域, 预定义服务, 自定义服务,<br/>    			              服务组]:<br/>    				if not browser.find_element_by_xpath(display_对象).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(对象).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [目标地址转换, 源地址转换, 负载均衡]:<br/>    				if not browser.find_element_by_xpath(display_地址转换).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(地址转换).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [主机标识, 应用加密, 手动密钥, 远程网关, 远程访问, 监控, CA证书]:<br/>    			browser.find_element_by_name(虚拟专网).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [Anti_DDoS设置, Anti_DDoS用户配置, Anti_DDoS规则列表, Anti_DDoS黑_白名单]:<br/>    			browser.find_element_by_name(DDoS防护).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [用户配置, 本地用户, 认证组, 认证服务器, 认证用户设置, 认证监控]:<br/>    			browser.find_element_by_name(认证用户).click()<br/>    			browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [日志统计, 日志服务器, 日志过滤, 日志格式, 日志告警, 管理日志, 系统日志, 安全日志, 流量日志]:<br/>    			browser.find_element_by_name(日志).click()<br/>    			if menu == 日志统计:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [日志服务器, 日志过滤, 日志格式, 日志告警]:<br/>    				if not browser.find_element_by_xpath(display_日志设置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(日志设置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [管理日志, 系统日志, 安全日志, 流量日志]:<br/>    				if not browser.find_element_by_xpath(display_日志记录).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(日志记录).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    				time.sleep(2)<br/>    <br/>    		elif menu in [报表设置, 接口统计报表, 流量排行报表, 会话监控报表, 系统状态报表, 事件统计报表, 会话表, Anti_DDoS会话数,<br/>    		              Anti_DDoS会话速率, Anti_DDoS数据包速率, Top_N, 来源IP统计]:<br/>    			browser.find_element_by_name(报表).click()<br/>    			if menu in [报表设置, 接口统计报表, 流量排行报表, 会话监控报表, 系统状态报表, 事件统计报表, 会话表]:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [Anti_DDoS会话数, Anti_DDoS会话速率, Anti_DDoS数据包速率, Top_N, 来源IP统计]:<br/>    				if not browser.find_element_by_xpath(display_DDoS防护).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(DDoS防护).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		else:<br/>    			print(&quot;导航菜单未知，请检查是否输入错误，或切换函数。&quot;)<br/>    <br/>    		browser.switch_to.default_content()<br/>    		# 定位到内容frame<br/>    		browser.switch_to.frame(&quot;content&quot;)<br/>    <br/>    	elif oem_name == &quot;SCG&quot; or oem_name == &quot;万兆测试&quot;:<br/>    		# print(&quot;进入SCG导航&quot;)<br/>    		# 有时间界面会出现告警，需要将告警信息print出来<br/>    		try:<br/>    			# print(&quot;Alert exists&quot;)<br/>    			alert = browser.switch_to_alert()<br/>    			print(alert.text)<br/>    			alert.accept()<br/>    		except:<br/>    			# print(&quot;无警告，点击返回&quot;)<br/>    			try:<br/>    				browser.find_element_by_xpath(&#x27;// *[ @ id = &quot;link_but&quot;]&#x27;).click()<br/>    			except:<br/>    				# print(&quot;无点击返回&quot;)<br/>    				pass<br/>    		browser.switch_to.default_content()<br/>    		# 定位到左侧frame<br/>    		browser.switch_to.frame(&quot;lefttree&quot;)<br/>    <br/>    		if menu in [系统状态, 管理员, 系统升级, Web证书, 重启系统, 系统信息, 时间设定, DNS,<br/>    		            配置文件, 高可用性, SNMP设置, SNMP_Trap, 网络诊断, 服务器诊断]:<br/>    			browser.find_element_by_name(系统).click()<br/>    			if menu == 系统状态:<br/>    				browser.find_element_by_name(menu).click()<br/>    			elif menu in [管理员, 系统升级, Web证书, 重启系统]:<br/>    				if not browser.find_element_by_xpath(display_系统管理).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(系统管理).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [系统信息,  时间设定, DNS, 配置文件, 高可用性, SNMP设置, SNMP_Trap]:<br/>    				if not browser.find_element_by_xpath(display_配置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(配置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [网络诊断, 服务器诊断]:<br/>    				if not browser.find_element_by_xpath(display_诊断工具).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(诊断工具).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [物理接口, 子接口, 网桥, DHCP设定, DHCP租用列表, ARP列表, 绑定列表, 桥MAC表, IPv6邻居列表,<br/>    		              IPv6隧道]:<br/>    			browser.find_element_by_name(网络).click()<br/>    			if menu in [物理接口, 子接口, 网桥]:<br/>    				if not browser.find_element_by_xpath(display_接口设置).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(接口设置).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [DHCP设定, DHCP租用列表]:<br/>    				if not browser.find_element_by_xpath(display_DHCP).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(DHCP).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    			elif menu in [ARP列表, 绑定列表, 桥MAC表, IPv6邻居列表, IPv6隧道]:<br/>    				if not browser.find_element_by_xpath(display_MAC).is_displayed():<br/>    					# 如果不可见，点击加号，展开元素<br/>    					browser.find_element_by_name(MAC).click()<br/>    				browser.find_element_by_name(menu).click()<br/>    <br/>    		elif menu in [静态路由, 策略路由, OSPF, ISP自动选择, 多网关组, 路由监控]:<br/>    			browser.find_element_by_name(路由).click()<br/>&gt;   			browser.find_element_by_name(menu).click()<br/><br/>page_obj\common\my_selenium.py:276: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.webelement.WebElement (session=&quot;67c614696551ce13ad3f2e623488b049&quot;, element=&quot;0.4736311753383813-2&quot;)&gt;<br/><br/>    def click(self):<br/>        &quot;&quot;&quot;Clicks the element.&quot;&quot;&quot;<br/>&gt;       self._execute(Command.CLICK_ELEMENT)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webelement.py:80: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.webelement.WebElement (session=&quot;67c614696551ce13ad3f2e623488b049&quot;, element=&quot;0.4736311753383813-2&quot;)&gt;<br/>command = &#x27;clickElement&#x27;<br/>params = {&#x27;id&#x27;: &#x27;0.4736311753383813-2&#x27;, &#x27;sessionId&#x27;: &#x27;67c614696551ce13ad3f2e623488b049&#x27;}<br/><br/>    def _execute(self, command, params=None):<br/>        &quot;&quot;&quot;Executes a command against the underlying HTML element.<br/>    <br/>            Args:<br/>              command: The name of the command to _execute as a string.<br/>              params: A dictionary of named parameters to send with the command.<br/>    <br/>            Returns:<br/>              The command&#x27;s JSON response loaded into a dictionary object.<br/>            &quot;&quot;&quot;<br/>        if not params:<br/>            params = {}<br/>        params[&#x27;id&#x27;] = self._id<br/>&gt;       return self._parent.execute(command, params)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webelement.py:628: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/>driver_command = &#x27;clickElement&#x27;<br/>params = {&#x27;id&#x27;: &#x27;0.4736311753383813-2&#x27;, &#x27;sessionId&#x27;: &#x27;67c614696551ce13ad3f2e623488b049&#x27;}<br/><br/>    def execute(self, driver_command, params=None):<br/>        &quot;&quot;&quot;<br/>            Sends a command to be executed by a command.CommandExecutor.<br/>    <br/>            :Args:<br/>             - driver_command: The name of the command to execute as a string.<br/>             - params: A dictionary of named parameters to send with the command.<br/>    <br/>            :Returns:<br/>              The command&#x27;s JSON response loaded into a dictionary object.<br/>            &quot;&quot;&quot;<br/>        if self.session_id is not None:<br/>            if not params:<br/>                params = {&#x27;sessionId&#x27;: self.session_id}<br/>            elif &#x27;sessionId&#x27; not in params:<br/>                params[&#x27;sessionId&#x27;] = self.session_id<br/>    <br/>        params = self._wrap_value(params)<br/>        response = self.command_executor.execute(driver_command, params)<br/>        if response:<br/>&gt;           self.error_handler.check_response(response)<br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\webdriver.py:320: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x0000000005ABD898&gt;<br/>response = {&#x27;sessionId&#x27;: &#x27;67c614696551ce13ad3f2e623488b049&#x27;, &#x27;status&#x27;: 11, &#x27;value&#x27;: {&#x27;message&#x27;: &#x27;element not visible\n  (Session ...r info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)&#x27;}}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>            Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>            :Args:<br/>             - response - The JSON response from the WebDriver server as a dictionary<br/>               object.<br/>    <br/>            :Raises: If the response contains an error message.<br/>            &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.ElementNotVisibleException: Message: element not visible</span><br/><span class="error">E         (Session info: chrome=80.0.3987.122)</span><br/><span class="error">E         (Driver info: chromedriver=2.41.578737 (49da6702b16031c40d63e5618de03a32ff6c197e),platform=Windows NT 6.1.7601 SP1 x86_64)</span><br/><br/>..\..\AppData\Local\Programs\Python\Python37\lib\site-packages\selenium\webdriver\remote\errorhandler.py:242: ElementNotVisibleException<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;67c614696551ce13ad3f2e623488b049&quot;)&gt;<br/><br/>    def test_c140806(browser):<br/>    	try:<br/>    		login_web(browser, url=dev1)<br/>    		start_ospf_jyl(browser)<br/>    		time.sleep(0.5)<br/>    		edit_ospf_interface_jyl(browser, ospf_interface=&quot;br_0&quot;, auth_type=&quot;md5&quot;, message_digest_key=&quot;25&quot;, md5_key=&quot;12&quot;,<br/>    								save=&quot;yes&quot;)<br/>    		edit_ospf_interface_jyl(browser, ospf_interface=&quot;br_0&quot;, auth_type=&quot;简单密码&quot;, text_key=&quot;123456&quot;, save=&quot;yes&quot;)<br/>    		loginfo1 = get_log_info(browser, 管理日志)<br/>    		time.sleep(0.5)<br/>    		# print(loginfo1)<br/>    		edit_ospf_interface_jyl(browser, ospf_interface=&quot;br_0&quot;, priority=&quot;1&quot;, hello_interval=&quot;10&quot;, dead_interval=&quot;40&quot;,<br/>    								auth_type=&quot;无&quot;, save=&quot;yes&quot;)<br/>    		stop_ospf_jyl(browser)<br/>    		try:<br/>    			assert &quot;成功修改&quot; in loginfo1<br/>    			rail_pass(test_run_id, test_id)<br/>    		except:<br/>    			rail_fail(test_run_id, test_id)<br/>    			assert &quot;成功修改&quot; in loginfo1<br/>    	except Exception as err:<br/>    		# 如果上面的步骤有报错，重新设备，恢复配置<br/>    		print(err)<br/>    		reload(hostip=dev1)<br/>    		rail_fail(test_run_id, test_id)<br/>&gt;   		assert False<br/><span class="error">E     assert False</span><br/><br/>test_case\scg\scg_OSPF\test_c140806.py:43: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:44:27.890575</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140776.py::test_c140776</td>
+          <td>None</td>
+          <td class="col-duration">10.28</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:44:37.342116</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140777.py::test_c140777</td>
+          <td>None</td>
+          <td class="col-duration">9.45</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:44:55.821173</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140778.py::test_c140778</td>
+          <td>None</td>
+          <td class="col-duration">18.47</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:45:17.304402</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140779.py::test_c140779</td>
+          <td>None</td>
+          <td class="col-duration">21.48</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:45:35.310432</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140780.py::test_c140780</td>
+          <td>None</td>
+          <td class="col-duration">18.00</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:45:53.966499</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140781.py::test_c140781</td>
+          <td>None</td>
+          <td class="col-duration">18.65</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:46:12.787575</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140782.py::test_c140782</td>
+          <td>None</td>
+          <td class="col-duration">18.82</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:46:49.347666</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140783.py::test_c140783</td>
+          <td>None</td>
+          <td class="col-duration">36.56</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:47:08.247747</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140784.py::test_c140784</td>
+          <td>None</td>
+          <td class="col-duration">18.90</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:47:27.138828</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140785.py::test_c140785</td>
+          <td>None</td>
+          <td class="col-duration">18.89</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:47:45.734891</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140786.py::test_c140786</td>
+          <td>None</td>
+          <td class="col-duration">18.59</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:48:04.638973</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140787.py::test_c140787</td>
+          <td>None</td>
+          <td class="col-duration">18.90</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:48:41.763096</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140788.py::test_c140788</td>
+          <td>None</td>
+          <td class="col-duration">37.12</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:49:01.367217</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140789.py::test_c140789</td>
+          <td>None</td>
+          <td class="col-duration">19.60</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:49:50.755042</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140791.py::test_c140791</td>
+          <td>None</td>
+          <td class="col-duration">28.58</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:50:10.485171</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140792.py::test_c140792</td>
+          <td>None</td>
+          <td class="col-duration">19.73</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:50:35.487601</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140793.py::test_c140793</td>
+          <td>None</td>
+          <td class="col-duration">25.00</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:54:09.759856</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140798.py::test_c140798</td>
+          <td>None</td>
+          <td class="col-duration">23.39</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:54:32.256143</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140799.py::test_c140799</td>
+          <td>None</td>
+          <td class="col-duration">22.49</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:54:53.794375</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140800.py::test_c140800</td>
+          <td>None</td>
+          <td class="col-duration">21.54</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:55:15.070592</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140801.py::test_c140801</td>
+          <td>None</td>
+          <td class="col-duration">21.28</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:55:34.645712</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140802.py::test_c140802</td>
+          <td>None</td>
+          <td class="col-duration">19.57</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:55:57.040992</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140803.py::test_c140803</td>
+          <td>None</td>
+          <td class="col-duration">22.39</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:56:17.011135</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140804.py::test_c140804</td>
+          <td>None</td>
+          <td class="col-duration">19.97</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 06:56:39.461419</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140805.py::test_c140805</td>
+          <td>None</td>
+          <td class="col-duration">22.45</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 07:00:27.925486</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140806.py::test_c140806</td>
+          <td>None</td>
+          <td class="col-duration">30.38</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 07:00:47.964632</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140807.py::test_c140807</td>
+          <td>None</td>
+          <td class="col-duration">20.04</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 07:01:18.039353</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140808.py::test_c140808</td>
+          <td>None</td>
+          <td class="col-duration">30.07</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 07:01:40.310626</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140809.py::test_c140809</td>
+          <td>None</td>
+          <td class="col-duration">22.27</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 07:01:59.871745</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140810.py::test_c140810</td>
+          <td>None</td>
+          <td class="col-duration">19.56</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 07:02:24.084130</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140887.py::test_c140887</td>
+          <td>None</td>
+          <td class="col-duration">24.21</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 07:03:04.332432</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140888.py::test_c140888</td>
+          <td>None</td>
+          <td class="col-duration">40.24</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 07:03:17.333176</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140942.py::test_c140942</td>
+          <td>None</td>
+          <td class="col-duration">13.00</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 07:03:34.282145</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140943.py::test_c140943</td>
+          <td>None</td>
+          <td class="col-duration">16.94</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 07:03:48.116936</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140944.py::test_c140944</td>
+          <td>None</td>
+          <td class="col-duration">13.83</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 07:04:01.950728</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140945.py::test_c140945</td>
+          <td>None</td>
+          <td class="col-duration">13.83</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 07:04:16.016532</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140946.py::test_c140946</td>
+          <td>None</td>
+          <td class="col-duration">14.06</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-time">2020-02-28 07:04:31.588423</td>
+          <td class="col-name">test_case/scg/scg_OSPF/test_c140947.py::test_c140947</td>
+          <td>None</td>
+          <td class="col-duration">13.09</td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>
